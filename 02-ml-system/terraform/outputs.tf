@@ -13,7 +13,7 @@ output "account_id" {
 
 output "bucket_name" {
   description = "Lab bucket holding input data, metadata and training output."
-  value       = aws_s3_bucket.lab.id
+  value       = terraform_data.bucket.output
 }
 
 output "execution_role_arn" {

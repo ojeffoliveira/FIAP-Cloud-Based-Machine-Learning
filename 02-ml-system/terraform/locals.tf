@@ -30,9 +30,9 @@ locals {
     metadata   = "metadata"
   }
 
-  train_channel_uri      = "s3://${aws_s3_bucket.lab.id}/${local.s3_prefixes.train}/"
-  validation_channel_uri = "s3://${aws_s3_bucket.lab.id}/${local.s3_prefixes.validation}/"
-  training_output_uri    = "s3://${aws_s3_bucket.lab.id}/${local.s3_prefixes.output}/"
+  train_channel_uri      = "s3://${terraform_data.bucket.output}/${local.s3_prefixes.train}/"
+  validation_channel_uri = "s3://${terraform_data.bucket.output}/${local.s3_prefixes.validation}/"
+  training_output_uri    = "s3://${terraform_data.bucket.output}/${local.s3_prefixes.output}/"
 
   # No personal data in tags: they end up in cost reports the whole class shares.
   tags = {
