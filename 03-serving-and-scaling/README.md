@@ -588,6 +588,39 @@ O `model_artifact_uri` vem de `DescribeTrainingJob`, nunca montado por convenç�
 </details>
 
 <details>
+<summary><b>💡 Clique para entender: por que o bucket aparece como <code>terraform_data.bucket</code></b></summary>
+<blockquote>
+
+O recurso natural seria `aws_s3_bucket`, e não é ele que está no código — pelo mesmo motivo do Lab 1.
+
+Depois do `CreateBucket`, o provider **lê de volta** cerca de quinze sub-configurações do bucket para preencher o estado. Uma delas é `s3:GetBucketObjectLockConfiguration`, negada por Service Control Policy na organização do AWS Academy. O bucket é criado e o `apply` falha na leitura seguinte — e não há `lifecycle`, versão de provider ou `-refresh=false` que escape, porque essa leitura acontece **dentro** da criação.
+
+No lugar dele, `terraform_data` (recurso nativo, sem provider) com um `local-exec` que cria o bucket pela CLI. O bucket continua sendo do Terraform: o nome vive no estado, os objetos de dados continuam esperando por ele no grafo de dependências, e `terraform destroy` o remove com `aws s3 rb --force` — o que importa aqui, porque `make batch` e o endpoint assíncrono escrevem objetos que o Terraform não gerencia. O preço é perder detecção de desvio (*drift*) nesse recurso.
+
+📚 Documentação oficial: [`terraform_data`](https://developer.hashicorp.com/terraform/language/resources/terraform-data) e [Service Control Policies](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html).
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>AccessDenied</code> em <code>s3:GetBucketObjectLockConfiguration</code></b></summary>
+<blockquote>
+
+A mensagem termina em `with an explicit deny in a service control policy` e cita `aws_s3_bucket` — recurso que este laboratório não declara mais. Logo, a origem é o **estado**: sobrou a entrada de uma execução antiga, e o Terraform repete a leitura negada em todo `plan`. Duas pistas confirmam: o plano é impresso normalmente antes do erro, e o bloco do erro não traz a linha `with <recurso>,`.
+
+Remova só a entrada do estado — nada é apagado na AWS, e o bucket existente é reaproveitado no próximo `apply`:
+
+```bash
+cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling
+terraform -chdir=terraform state list | grep aws_s3_bucket
+terraform -chdir=terraform state rm aws_s3_bucket.lab
+make apply
+```
+
+</blockquote>
+</details>
+
+<details>
 <summary><b>⚠ Se der erro: <code>ExpiredToken</code> no meio do apply</b></summary>
 <blockquote>
 
@@ -1122,7 +1155,7 @@ Vinte e dois: os nove do estágio 1 (bucket, suas três configurações de segur
 <summary><b>⚠ Se der erro: o destroy falha porque o bucket não está vazio</b></summary>
 <blockquote>
 
-Aconteceu algo fora do Terraform (por exemplo, um segundo `make batch` cujo output ainda não foi limpo). Esvazie manualmente e rode de novo:
+Aconteceu algo fora do Terraform (por exemplo, um segundo `make batch` cujo output ainda não foi limpo). O `destroy` do bucket já roda `aws s3 rb --force`, que esvazia antes de apagar; se ainda assim falhar, esvazie explicitamente e rode de novo:
 
 ```bash
 cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling

@@ -10,7 +10,7 @@ output "account_id" {
 }
 
 output "bucket_name" {
-  value = aws_s3_bucket.lab.id
+  value = terraform_data.bucket.output
 }
 
 output "execution_role_arn" {

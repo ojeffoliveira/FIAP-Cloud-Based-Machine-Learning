@@ -36,10 +36,10 @@ locals {
     async_output = "async/output"
   }
 
-  train_channel_uri      = "s3://${aws_s3_bucket.lab.id}/${local.s3_prefixes.train}/"
-  validation_channel_uri = "s3://${aws_s3_bucket.lab.id}/${local.s3_prefixes.validation}/"
-  training_output_uri    = "s3://${aws_s3_bucket.lab.id}/${local.s3_prefixes.output}/"
-  async_output_uri       = "s3://${aws_s3_bucket.lab.id}/${local.s3_prefixes.async_output}/"
+  train_channel_uri      = "s3://${terraform_data.bucket.output}/${local.s3_prefixes.train}/"
+  validation_channel_uri = "s3://${terraform_data.bucket.output}/${local.s3_prefixes.validation}/"
+  training_output_uri    = "s3://${terraform_data.bucket.output}/${local.s3_prefixes.output}/"
+  async_output_uri       = "s3://${terraform_data.bucket.output}/${local.s3_prefixes.async_output}/"
 
   realtime_variant_resource_id = "endpoint/${local.realtime_endpoint_name}/variant/AllTraffic"
   async_variant_resource_id    = "endpoint/${local.async_endpoint_name}/variant/AllTraffic"
@@ -52,4 +52,11 @@ locals {
     ManagedBy = "Terraform"
     Owner     = "student"
   }
+
+  # Same tag set in the shape the S3 API expects, for the bucket the CLI creates
+  # (see s3.tf) - provider default_tags only reach resources the provider itself
+  # creates.
+  bucket_tagging_json = jsonencode({
+    TagSet = [for k, v in local.tags : { Key = k, Value = v }]
+  })
 }
