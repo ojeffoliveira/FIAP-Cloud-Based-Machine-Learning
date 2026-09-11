@@ -41,4 +41,11 @@ locals {
     purpose    = "education"
     managed_by = "terraform"
   }
+
+  # Same tag set in the shape the S3 API expects, for the bucket the CLI creates
+  # (see s3.tf) - provider default_tags only reach resources the provider itself
+  # creates.
+  bucket_tagging_json = jsonencode({
+    TagSet = [for k, v in local.tags : { Key = k, Value = v }]
+  })
 }

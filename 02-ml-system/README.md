@@ -729,7 +729,8 @@ A primeira coisa que aparece é o cabeçalho do estágio 1 e, no fim dele, a cri
 > == stage 1/2: storage and training job ==
 > ...
 > random_id.lifecycle: Creation complete after 0s [id=DKmJXQ]
-> aws_s3_bucket.lab: Creation complete after 4s [id=prb-cloud-ml-lab1-123456789012]
+> terraform_data.bucket: Provisioning with 'local-exec'...
+> terraform_data.bucket: Creation complete after 4s [id=1d4c9f7e-...]
 > aws_s3_object.schema: Creation complete after 1s [id=.../metadata/schema.json]
 > aws_s3_object.manifest: Creation complete after 1s [id=.../metadata/dataset_manifest.json]
 > aws_s3_object.validation: Creation complete after 1s [id=.../input/validation/validation.csv]
@@ -740,6 +741,41 @@ A primeira coisa que aparece é o cabeçalho do estágio 1 e, no fim dele, a cri
 > ```
 
 ![](img/12-make-apply.png)
+
+<details>
+<summary><b>💡 Clique para entender: por que o bucket aparece como <code>terraform_data.bucket</code></b></summary>
+<blockquote>
+
+O recurso natural para criar um bucket seria `aws_s3_bucket`. Ele não é usado aqui por causa de uma restrição da conta do Academy, e o motivo é uma aula inteira sobre como IaC conversa com a nuvem.
+
+Depois de criar o bucket, o provider **lê de volta** cerca de quinze sub-configurações dele (versionamento, criptografia, CORS, site estático, object lock…) para preencher o estado. Uma dessas leituras é `s3:GetBucketObjectLockConfiguration`, e a organização do AWS Academy **nega essa chamada** por Service Control Policy. Resultado: o bucket é criado com sucesso e o `apply` falha logo depois, na leitura. Nenhum `lifecycle`, versão de provider ou `-refresh=false` escapa disso, porque a leitura acontece **dentro** da criação.
+
+A saída aqui é `terraform_data` — recurso nativo do Terraform, sem provider nenhum — com um `local-exec` que cria o bucket pela CLI. O que importa é o que **não** se perde: o nome vive no estado, os quatro objetos continuam esperando o bucket pelo grafo de dependências, e `terraform destroy` remove o bucket. O que se perde é a detecção de desvio (*drift*): se alguém apagar o bucket por fora, o próximo `plan` não percebe. Em produção essa troca precisaria de outra conversa; num laboratório com nome de bucket derivado da conta, é barata.
+
+📚 Documentação oficial: [`terraform_data`](https://developer.hashicorp.com/terraform/language/resources/terraform-data) e [Service Control Policies](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html).
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>AccessDenied</code> em <code>s3:GetBucketObjectLockConfiguration</code></b></summary>
+<blockquote>
+
+A mensagem completa termina em `with an explicit deny in a service control policy`, e o recurso citado é `aws_s3_bucket`. Como este laboratório não declara mais nenhum `aws_s3_bucket`, a origem é o **estado**: sobrou o recurso de uma execução antiga, e o Terraform refaz a leitura negada a cada `plan`.
+
+Duas pistas confirmam o diagnóstico: o plano é impresso normalmente antes do erro, e o bloco do erro **não** traz a linha `with <recurso>,` — o Terraform só ancora o erro num endereço que existe no código.
+
+Remova só a entrada do estado (nada é apagado na AWS; o bucket existente é reaproveitado no próximo `apply`):
+
+```bash
+cd /workspaces/FIAP-Cloud-Based-Machine-Learning/02-ml-system
+terraform -chdir=terraform state list | grep aws_s3_bucket
+terraform -chdir=terraform state rm aws_s3_bucket.lab
+make apply
+```
+
+</blockquote>
+</details>
 
 Repare em `aws_sagemaker_training_job.churn: Creation complete after 1s`. O Terraform criou o job em 1 segundo, mas o treino **não** terminou em 1 segundo. O que terminou foi a **submissão**: o Terraform pediu à AWS "comece a treinar" e a AWS respondeu "aceito". O treino roda de forma assíncrona, e é o portão entre os dois estágios que espera o resultado:
 
@@ -765,7 +801,9 @@ Se o training job foi submetido antes do vencimento, ele continua rodando na AWS
 <summary><b>⚠ Se der erro: <code>BucketAlreadyOwnedByYou</code> ou o bucket já existe</b></summary>
 <blockquote>
 
-Você já rodou o laboratório antes e o bucket sobrou de um ciclo anterior. O nome do bucket é derivado da sua conta, então ele é estável entre execuções. Duas saídas:
+Não deveria acontecer: o nome do bucket é derivado da sua conta (estável entre execuções) e o `apply` verifica com `head-bucket` antes de criar — se o bucket já existe, ele é **reaproveitado** em silêncio. Se a mensagem aparecer mesmo assim, é sinal de que veio de outro caminho (um `aws s3api create-bucket` seu, por exemplo).
+
+Para recomeçar do zero:
 
 ```bash
 # opção 1: destruir o ciclo anterior por completo e recomeçar
@@ -1384,7 +1422,7 @@ Doze recursos: os nove do estágio 1 mais os três do estágio 2. O Terraform de
 <summary><b>⚠ Se der erro: o destroy falha porque o bucket não está vazio</b></summary>
 <blockquote>
 
-Acontece quando algo escreveu no bucket fora do Terraform — por exemplo, um segundo training job. Esvazie e rode de novo:
+O `destroy` do bucket já roda `aws s3 rb --force`, que esvazia antes de apagar — inclusive o `model.tar.gz` que o SageMaker escreveu e que o Terraform não gerencia. Se ainda assim falhar, esvazie explicitamente e rode de novo:
 
 ```bash
 cd /workspaces/FIAP-Cloud-Based-Machine-Learning/02-ml-system

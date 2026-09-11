@@ -16,11 +16,19 @@ resource "terraform_data" "bucket" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
       set -euo pipefail
-      if aws s3api head-bucket --bucket ${self.input} 2>/dev/null; then
-        exit 0
+      if ! aws s3api head-bucket --bucket ${self.input} 2>/dev/null; then
+        aws s3api create-bucket --bucket ${self.input} --region ${var.region} > /dev/null
+        aws s3api wait bucket-exists --bucket ${self.input}
       fi
-      aws s3api create-bucket --bucket ${self.input} --region ${var.region} > /dev/null
-      aws s3api wait bucket-exists --bucket ${self.input}
+
+      # provider default_tags never reach a bucket the CLI created, so the tag set
+      # travels explicitly. Best effort on purpose: if the account's SCP also denies
+      # PutBucketTagging, an untagged bucket is a far better outcome for the student
+      # than a failed apply.
+      aws s3api put-bucket-tagging \
+        --bucket ${self.input} \
+        --tagging '${local.bucket_tagging_json}' > /dev/null ||
+        echo "warning: could not tag the bucket (likely denied by an SCP); continuing" >&2
     EOT
   }
 
