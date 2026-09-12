@@ -1,14 +1,15 @@
-# The bucket belongs to Terraform - just not through the aws_s3_bucket resource.
+# O bucket pertence ao Terraform - só não através do recurso aws_s3_bucket.
 #
-# aws_s3_bucket reads GetBucketObjectLockConfiguration immediately after
-# CreateBucket, and the AWS Academy SCP denies that call with an explicit deny.
-# The bucket is created and the apply fails anyway; no lifecycle block, provider
-# version or -refresh=false skips that read, because it happens inside Create.
+# O aws_s3_bucket lê GetBucketObjectLockConfiguration imediatamente depois do
+# CreateBucket, e a SCP do AWS Academy nega essa chamada com deny explícito. O
+# bucket é criado e o apply falha do mesmo jeito; nenhum bloco lifecycle, versão
+# de provider ou -refresh=false pula essa leitura, porque ela acontece dentro do
+# Create.
 #
-# terraform_data keeps ownership where the lab needs it: the name lives in state,
-# every upload below still waits for the bucket through the dependency graph, and
-# `terraform destroy` removes it. What is lost is drift detection - if someone
-# deletes the bucket outside Terraform, the next plan will not notice.
+# O terraform_data mantém a posse onde o lab precisa: o nome vive no state, todo
+# upload abaixo continua esperando o bucket pelo grafo de dependências, e o
+# `terraform destroy` remove ele. O que se perde é a detecção de drift - se alguém
+# apagar o bucket fora do Terraform, o próximo plan não vai notar.
 resource "terraform_data" "bucket" {
   input = local.bucket_name
 
@@ -21,14 +22,14 @@ resource "terraform_data" "bucket" {
         aws s3api wait bucket-exists --bucket ${self.input}
       fi
 
-      # provider default_tags never reach a bucket the CLI created, so the tag set
-      # travels explicitly. Best effort on purpose: if the account's SCP also denies
-      # PutBucketTagging, an untagged bucket is a far better outcome for the student
-      # than a failed apply.
+      # o default_tags do provider nunca alcança um bucket que a CLI criou, então o
+      # conjunto de tags viaja explicitamente. Tolerante a falha de propósito: se a
+      # SCP da conta também negar PutBucketTagging, um bucket sem tag é um desfecho
+      # muito melhor para o aluno que um apply reprovado.
       aws s3api put-bucket-tagging \
         --bucket ${self.input} \
         --tagging '${local.bucket_tagging_json}' > /dev/null ||
-        echo "warning: could not tag the bucket (likely denied by an SCP); continuing" >&2
+        echo "aviso: não foi possível aplicar as tags no bucket (provavelmente negado por uma SCP); seguindo" >&2
     EOT
   }
 

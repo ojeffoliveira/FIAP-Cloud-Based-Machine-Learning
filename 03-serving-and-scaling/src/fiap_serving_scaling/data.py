@@ -1,10 +1,10 @@
-"""Deterministic dataset generation and the executable data contract.
+"""Geração determinística do dataset e o contrato de dados executável.
 
-Lab 03 deliberately uses a generic synthetic classifier
-(sklearn.datasets.make_classification) instead of the domain feature
-generator from 02-ml-system: the pedagogical focus here is the serving
-pattern, not feature engineering, and this keeps the lab technically
-self-sufficient (no residual state from Lab 02 is required).
+O Lab 03 usa de propósito um classificador sintético genérico
+(sklearn.datasets.make_classification) em vez do gerador de features de domínio do
+02-ml-system: o foco pedagógico aqui é o padrão de serving, não engenharia de
+features, e isso mantém o lab tecnicamente autossuficiente (não é necessário
+nenhum estado remanescente do Lab 02).
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ def generate(cfg: LabConfig, out_dir: Path) -> dict[str, Any]:
     def with_label_first(x: np.ndarray, y: np.ndarray) -> np.ndarray:
         return np.column_stack([y.astype(int), np.round(x, 6)])
 
-    log(f"[data] seed={cfg.seed} n_samples={cfg.n_samples} out={out_dir}")
+    log(f"[data] semente={cfg.seed} n_samples={cfg.n_samples} destino={out_dir}")
 
     _write_headerless_csv(out_dir / TRAIN_FILE, with_label_first(x_train, y_train))
     _write_headerless_csv(out_dir / VALIDATION_FILE, with_label_first(x_val, y_val))
@@ -113,7 +113,7 @@ def generate(cfg: LabConfig, out_dir: Path) -> dict[str, Any]:
         ("validation", n_val, prevalence["validation"]),
         ("test", n_test, prevalence["test"]),
     ):
-        log(f"[data] {name:<10} {count:>4} rows  prevalence {prev:.4f}")
+        log(f"[data] {name:<10} {count:>4} linhas  prevalência {prev:.4f}")
 
     manifest = {
         "schema_version": "1.0.0",
@@ -138,12 +138,12 @@ def generate(cfg: LabConfig, out_dir: Path) -> dict[str, Any]:
     with open(out_dir / MANIFEST_FILE, "w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2, sort_keys=True)
 
-    log(f"[data] written to {out_dir}")
+    log(f"[data] escrito em {out_dir}")
     return manifest
 
 
 # --------------------------------------------------------------------------- #
-# Executable contract
+# Contrato executável
 # --------------------------------------------------------------------------- #
 
 
@@ -200,11 +200,12 @@ def validate(cfg: LabConfig, data_dir: Path) -> dict[str, Any]:
 
     checks["values.no_nan_or_inf"] = finite(train_rows) and finite(val_rows) and finite(test_features_rows)
 
-    # Proves there is no label leak and no column-order drift: the features in
-    # test_labeled.csv (explicit id/label columns) must equal, value for value,
-    # the corresponding row in the headerless test_features.csv used for
-    # inference. A silent reorder or an accidental extra label column would
-    # show up here as a mismatch, not as a plausible-looking wrong number.
+    # Prova que não há vazamento de rótulo nem desvio na ordem das colunas: as
+    # features do test_labeled.csv (com colunas id/label explícitas) precisam ser
+    # iguais, valor por valor, à linha correspondente do test_features.csv sem
+    # cabeçalho usado na inferência. Uma reordenação silenciosa ou uma coluna de
+    # rótulo a mais por acidente apareceria aqui como divergência, não como um
+    # número errado de aparência plausível.
     with open(data_dir / TEST_LABELED_FILE, encoding="utf-8") as handle:
         labeled_reader = csv.DictReader(handle)
         labeled_features = [

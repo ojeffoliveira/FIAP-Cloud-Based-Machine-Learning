@@ -1,6 +1,6 @@
-# The one Model every serving mode below points to. "One model, four ways to
-# consume it" only holds if the three EndpointConfigs all reference this same
-# resource - never a per-mode copy of the artifact.
+# O único Model para o qual todo modo de serving abaixo aponta. "Um modelo,
+# quatro formas de consumir" só se sustenta se as três EndpointConfigs
+# referenciarem este mesmo recurso - nunca uma cópia do artefato por modo.
 resource "aws_sagemaker_model" "churn" {
   count = var.deploy_serving ? 1 : 0
 
@@ -15,7 +15,7 @@ resource "aws_sagemaker_model" "churn" {
   lifecycle {
     precondition {
       condition     = var.model_artifact_uri != ""
-      error_message = "model_artifact_uri is empty. Run `make apply`, which resolves it from DescribeTrainingJob before deploying."
+      error_message = "model_artifact_uri está vazio. Rode `make apply`, que resolve esse valor pelo DescribeTrainingJob antes de publicar."
     }
   }
 }

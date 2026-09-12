@@ -127,7 +127,7 @@ Por isso o Passo 21 (`make scale-demo`) não espera o tráfego real disparar a p
 
 ### Resultado esperado desta parte
 
-`make doctor` respondendo `[PASS] preflight`, com Terraform, Python, a conta do Learner Lab identificada, `us-east-1` confirmada e a `LabRole` encontrada.
+`make doctor` respondendo `[PASS] verificação prévia`, com Terraform, Python, a conta do Learner Lab identificada, `us-east-1` confirmada e a `LabRole` encontrada.
 
 <a id="passo-1"></a>
 
@@ -159,7 +159,7 @@ make setup
 
 > Saída esperada (leva de 30 a 90 segundos):
 > ```text
-> ==> terraform 1.15.6 available
+> ==> terraform 1.15.6 disponível
 > ==> terraform : Terraform v1.15.6
 > ==> python    : Python 3.x.x
 > ==> pronto. Próximo passo: make doctor
@@ -197,29 +197,29 @@ make help
 > ```text
 > Lab 03 - Serving and Scaling
 >
->   help           Show available targets
->   setup          Create/update the lab .venv with pinned dependencies
->   doctor         Check tool versions and AWS credentials/region/role
->   data           Generate the deterministic dataset
->   validate-data  Run the executable data contract and print exact hashes
->   fmt            Format Terraform (check in CI, rewrite locally)
+>   help           Lista os alvos disponíveis
+>   setup          Cria/atualiza o .venv do lab com as dependências fixadas
+>   doctor         Confere versões das ferramentas e credenciais/região/role da AWS
+>   data           Gera o dataset determinístico
+>   validate-data  Roda o contrato de dados executável e imprime os hashes exatos
+>   fmt            Formata o Terraform (confere no CI, reescreve localmente)
 >   validate       terraform init + validate
->   plan           Plan the current stage
->   apply          Provision storage + training bootstrap, gate, then 3 endpoints + autoscaling
->   status         Describe endpoints, configs and scalable targets as JSON
->   compare        Smoke + first/warm latency, real-time vs serverless
->   async          Upload payload to S3, InvokeEndpointAsync, wait for and validate output
->   batch          CreateTransformJob for the 600-row test set, wait, validate 600 outputs
->   load           Load test the real-time endpoint at concurrency 1/4/8
->   scale-demo     Prove 1->2->1 instances via Application Auto Scaling, restore config
->   evidence       Consolidate checkable results into artifacts/evidence/
->   destroy        Destroy every managed resource
->   verify-clean   Prove by direct API query that nothing billable of this lab's prefix remains
->   e2e            Full lifecycle with failure-safe cleanup (KEEP_RESOURCES=1 to skip destroy)
->   clean          Remove generated local artifacts (never touches AWS)
+>   plan           Planeja o estágio atual
+>   apply          Provisiona storage + bootstrap de treino, portão, e então 3 endpoints + autoscaling
+>   status         Descreve endpoints, configs e scalable targets em JSON
+>   compare        Smoke + latência da primeira chamada e das quentes, real-time vs serverless
+>   async          Sobe o payload para o S3, InvokeEndpointAsync, espera e valida a saída
+>   batch          CreateTransformJob para as 600 linhas de teste, espera e valida as 600 saídas
+>   load           Teste de carga no endpoint real-time com concorrência 1/4/8
+>   scale-demo     Prova 1->2->1 instâncias via Application Auto Scaling e restaura a config
+>   evidence       Consolida os resultados conferíveis em artifacts/evidence/
+>   destroy        Destrói todos os recursos gerenciados
+>   verify-clean   Prova por consulta direta à API que não sobrou nada cobrando com o prefixo deste lab
+>   e2e            Ciclo completo com limpeza à prova de falha (KEEP_RESOURCES=1 pula o destroy)
+>   clean          Remove artefatos locais gerados (nunca toca na AWS)
 >
->   Full lifecycle:  make e2e
->   Keep resources:  make e2e KEEP_RESOURCES=1   (you must run make destroy later)
+>   Ciclo completo:  make e2e
+>   Manter recursos: make e2e KEEP_RESOURCES=1   (você precisa rodar make destroy depois)
 > ```
 
 São 19 comandos, e é a lista inteira do laboratório.
@@ -268,21 +268,21 @@ make doctor
 
 > Saída esperada (o número da conta é o da sua conta):
 > ```text
-> AWS preflight
->   account          : 123456789012
->   caller           : arn:aws:sts::1234****9012:assumed-role/voclabs/user1234567=
->   region           : us-east-1 (required us-east-1)
->   execution role   : arn:aws:iam::1234****9012:role/LabRole
->   lab bucket to use: prb-cloud-ml-lab2-123456789012-us-east-1
+> Verificação prévia da AWS
+>   conta            : 123456789012
+>   chamador         : arn:aws:sts::1234****9012:assumed-role/voclabs/user1234567=
+>   região           : us-east-1 (exigida us-east-1)
+>   role de execução : arn:aws:iam::1234****9012:role/LabRole
+>   bucket do lab    : prb-cloud-ml-lab2-123456789012-us-east-1
 >   sagemaker_reachable             : ok
 >   s3_reachable                    : ok
 >   cloudwatch_reachable            : ok
 >   application_autoscaling_reachable: ok
->   credentials are never printed by this lab
-> [PASS] preflight
+>   este lab nunca imprime credencial
+> [PASS] verificação prévia
 > ```
 
-> 📸 Print 01 — capture o terminal com as quatro linhas `_reachable : ok` e a linha final `[PASS] preflight`: mostra ao aluno que o ambiente está pronto antes de qualquer custo.
+> 📸 Print 01 — capture o terminal com as quatro linhas `_reachable : ok` e a linha final `[PASS] verificação prévia`: mostra ao aluno que o ambiente está pronto antes de qualquer custo.
 <!-- ![](img/01-make-doctor.png) -->
 
 <details>
@@ -328,7 +328,7 @@ Este lab só está autorizado a usar a `LabRole` pré-existente do Academy, nunc
 
 ### Checkpoint
 
-- [x] `make doctor` termina com `[PASS] preflight`.
+- [x] `make doctor` termina com `[PASS] verificação prévia`.
 - [x] Os quatro serviços (SageMaker, S3, CloudWatch, Application Auto Scaling) respondem `ok`.
 
 Nenhum recurso foi criado na AWS até aqui.
@@ -351,11 +351,11 @@ make data
 
 > Saída esperada:
 > ```text
-> [data] seed=42 n_samples=4000 out=/workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling/artifacts/data
-> [data] train      2800 rows  prevalence 0.3450
-> [data] validation  600 rows  prevalence 0.3450
-> [data] test        600 rows  prevalence 0.3450
-> [data] written to /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling/artifacts/data
+> [data] semente=42 n_samples=4000 destino=/workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling/artifacts/data
+> [data] train      2800 linhas  prevalência 0.3450
+> [data] validation  600 linhas  prevalência 0.3450
+> [data] test        600 linhas  prevalência 0.3450
+> [data] escrito em /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling/artifacts/data
 > ```
 
 > 📸 Print 02 — capture as três linhas `train`/`validation`/`test` com as contagens e a prevalência.
@@ -410,7 +410,7 @@ make validate-data
 >   [PASS] test_features.matches_labeled_features_no_leak
 >   [PASS] feature_order.matches_manifest
 >   [PASS] manifest.sha256_matches_files
-> [PASS] data contract
+> [PASS] contrato de dados
 > ```
 >
 > SHA-256 publicados (conferidos nesta execução):
@@ -422,7 +422,7 @@ make validate-data
 > async_payload.csv  ca70dcbed6bcef920906ccbe1b4e364c39c5c59702f214d892c21778e5ddf49d
 > ```
 
-> 📸 Print 03 — capture os 13 `[PASS]` e a linha final `[PASS] data contract`.
+> 📸 Print 03 — capture os 13 `[PASS]` e a linha final `[PASS] contrato de dados`.
 <!-- ![](img/03-contrato-13-checks.png) -->
 
 `test_features.csv` e `batch_input.csv` têm o mesmo hash de propósito: são o mesmo conjunto de 600 linhas de teste, usado por dois canais diferentes (invocação direta vs. transform job).
@@ -465,7 +465,7 @@ Guarde esses quatro nomes: eles reaparecem no `DECISION.md` no Passo 24.
 ### Checkpoint
 
 - [x] `artifacts/data/` tem os seis arquivos.
-- [x] `[PASS] data contract` com os 13 checks aprovando.
+- [x] `[PASS] contrato de dados` com os 13 checks aprovando.
 - [x] Você identificou os quatro `padrao:` em `config/lab.yaml`.
 
 Continua sem nenhum recurso criado na AWS.
@@ -537,15 +537,15 @@ make apply
 
 > Saída esperada (resumida; a sua vai ter um sufixo diferente de `dc8799d3`, e os tempos variam por execução):
 > ```text
-> == stage 1/2: storage and training bootstrap ==
+> == estágio 1/2: storage e bootstrap de treino ==
 > ...
 > aws_sagemaker_training_job.churn: Creation complete after 1s
 > Apply complete! Resources: 9 added, 0 changed, 0 destroyed.
-> == gate: wait for the training job and prove the artifact exists ==
+> == portão: esperar o training job e provar que o artefato existe ==
 > [training] prb-cloud-ml-lab2-train-dc8799d3: Completed / Completed
-> [wait] prb-cloud-ml-lab2-train-dc8799d3: Completed in 135s billable
-> [wait] artifact proven via HeadObject: s3://.../model.tar.gz (21717 bytes)
-> == stage 2/2: model, 3 endpoint configs/endpoints, autoscaling ==
+> [wait] prb-cloud-ml-lab2-train-dc8799d3: Completed em 135s cobrados
+> [wait] artefato comprovado via HeadObject: s3://.../model.tar.gz (21717 bytes)
+> == estágio 2/2: model, 3 endpoint configs/endpoints, autoscaling ==
 > ...
 > aws_sagemaker_endpoint.serverless[0]: Creation complete after 3m1s
 > aws_sagemaker_endpoint.realtime[0]: Creation complete after 3m29s
@@ -730,7 +730,7 @@ make compare
 > ```text
 > [compare] realtime    first=452.848ms warm_p50=441.605ms warm_p95=470.669ms
 > [compare] serverless  first=6395.562ms warm_p50=471.810ms warm_p95=512.949ms
-> [compare] predictions_match=True (tolerance 1e-06)
+> [compare] predictions_match=True (tolerância 1e-06)
 > ```
 
 > 📸 Print 06 — capture as linhas `first`/`warm_p50`/`warm_p95` dos dois modos e a linha `predictions_match=True`.
@@ -803,7 +803,7 @@ make async
 
 > Saída esperada (nomes e IDs mudam a cada execução):
 > ```text
-> [async] uploaded payload (50 rows) to s3://prb-cloud-ml-lab2-.../async/input/1787444194.csv
+> [async] payload de 50 linhas enviado para s3://prb-cloud-ml-lab2-.../async/input/1787444194.csv
 > [async] InferenceId=2300c4e2-c399-4fe4-8101-deafff68e80a output=s3://prb-cloud-ml-lab2-.../async/output/177e9993-d57f-4b68-8a02-d8689cd1cc93.out
 > [async] input_count=50 output_count=50
 > ```
@@ -883,10 +883,10 @@ Mecânica: sobe `batch_input.csv` (as mesmas 600 linhas de `test_features.csv`) 
 
 > Saída esperada (nome do job e duração mudam a cada execução):
 > ```text
-> [batch] creating transform job prb-cloud-ml-lab2-batch-1787444210
+> [batch] criando o transform job prb-cloud-ml-lab2-batch-1787444210
 > [batch] prb-cloud-ml-lab2-batch-1787444210: InProgress
 > [batch] prb-cloud-ml-lab2-batch-1787444210: Completed
-> [batch] output_count=600 duration_observed=119.725s
+> [batch] output_count=600 duração_observada=119.725s
 > ```
 
 > 📸 Print 08 — capture o `Completed` e a linha `output_count=600`.
@@ -987,15 +987,15 @@ make scale-demo
 
 > Saída esperada:
 > ```text
-> [scale] before: 1
-> [scale] raising MinCapacity/MaxCapacity to 2 to force a deterministic scale-out
-> [scale] scaled: 2
-> [scale] restoring MinCapacity=1, MaxCapacity=2 (Terraform-managed values, no drift left behind)
-> [scale] forcing DesiredInstanceCount back to 1: lowering MaxCapacity alone does not make Application Auto Scaling scale in, that only happens once the target-tracking alarm evaluates
-> [scale] restored: 1
+> [scale] antes: 1
+> [scale] subindo MinCapacity/MaxCapacity para 2 para forçar um scale-out determinístico
+> [scale] escalado: 2
+> [scale] restaurando MinCapacity=1, MaxCapacity=2 (valores gerenciados pelo Terraform, sem deixar drift)
+> [scale] forçando DesiredInstanceCount de volta para 1: baixar só o MaxCapacity não faz o Application Auto Scaling reduzir, isso só acontece quando o alarme de target tracking avalia
+> [scale] restaurado: 1
 > ```
 
-> 📸 Print 10 — capture as três linhas `before`/`scaled`/`restored`, a prova do 1→2→1.
+> 📸 Print 10 — capture as três linhas `antes`/`escalado`/`restaurado`, a prova do 1→2→1.
 <!-- ![](img/10-make-scale-demo.png) -->
 
 A espera de cada transição pode variar; o timeout é de até 600 segundos por transição.
@@ -1108,7 +1108,7 @@ Termine as quatro seções de recomendação (uma por workload), a seção "Cust
 
 ### Checkpoint
 
-- [x] `artifacts/evidence/summary.md` mostra `Chain complete: yes`.
+- [x] `artifacts/evidence/summary.md` mostra `Cadeia completa: sim`.
 - [x] `DECISION.md` tem as quatro recomendações, custo do erro e condições preenchidos.
 
 ---
@@ -1196,10 +1196,10 @@ make verify-clean
 >   [PASS] no_cloudwatch_alarms_for_prefix
 >   [PASS] no_lab_bucket
 >   [PASS] no_active_training_or_transform_jobs
-> [PASS] verify-clean
+> [PASS] verificação de limpeza
 > ```
 
-> 📸 Print 13 — capture os oito `[PASS]` e a linha final `[PASS] verify-clean`, o fechamento do lab.
+> 📸 Print 13 — capture os oito `[PASS]` e a linha final `[PASS] verificação de limpeza`, o fechamento do lab.
 <!-- ![](img/13-verify-clean.png) -->
 
 Este comando **não olha o state do Terraform**: ele pergunta direto às APIs se sobrou endpoint, config, modelo, scalable target, política, alarme ou bucket com o prefixo `prb-cloud-ml-lab2`. Um training/transform job antigo com status `Completed` pode continuar listado — isso não é falha, porque não é um recurso ativo faturável.
@@ -1221,7 +1221,7 @@ make verify-clean
 ### Checkpoint
 
 - [x] `Destroy complete!`
-- [x] `make verify-clean` responde `[PASS] verify-clean` com os oito itens.
+- [x] `make verify-clean` responde `[PASS] verificação de limpeza` com os oito itens.
 
 **Zero recursos cobrando.**
 

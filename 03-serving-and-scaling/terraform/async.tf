@@ -1,6 +1,6 @@
-# Asynchronous Inference: request/response decoupled through S3. Input goes
-# in via S3 (uploaded by scripts/lab.py async), output lands under
-# local.async_output_uri. Capacity can scale to zero between requests.
+# Asynchronous Inference: requisição e resposta desacopladas pelo S3. A entrada
+# chega via S3 (enviada por scripts/lab.py async) e a saída cai em
+# local.async_output_uri. A capacidade pode ir a zero entre requisições.
 resource "aws_sagemaker_endpoint_configuration" "async" {
   count = var.deploy_serving ? 1 : 0
 

@@ -1,6 +1,6 @@
-# Real-Time Endpoint: persistent instance, previsible latency, cobra 24/7.
-# This resource DOES wait for InService in provider 6.60.0, so a successful
-# apply here means the endpoint is actually reachable.
+# Real-Time Endpoint: instância persistente, latência previsível, cobra 24/7.
+# Este recurso ESPERA pelo InService no provider 6.60.0, então um apply
+# bem-sucedido aqui significa que o endpoint está de fato alcançável.
 resource "aws_sagemaker_endpoint_configuration" "realtime" {
   count = var.deploy_serving ? 1 : 0
 

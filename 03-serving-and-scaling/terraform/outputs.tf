@@ -1,5 +1,5 @@
-# Only non-secret identifiers. Temporary Academy credentials are never
-# exposed here, in state, or in logs.
+# Somente identificadores não secretos. As credenciais temporárias do Academy
+# nunca são expostas aqui, no state, nem em log.
 
 output "region" {
   value = var.region

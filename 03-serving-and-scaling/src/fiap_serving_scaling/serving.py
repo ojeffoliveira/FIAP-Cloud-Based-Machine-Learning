@@ -1,4 +1,4 @@
-"""CSV<->request helpers shared by compare/async/batch/load."""
+"""Helpers de CSV<->requisição compartilhados por compare/async/batch/load."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def read_csv_rows(path: Path) -> list[str]:
-    """Return raw CSV lines (no header expected), stripped of blank lines."""
+    """Devolve as linhas cruas do CSV (sem cabeçalho esperado), sem linhas vazias."""
     with open(path, encoding="utf-8") as handle:
         return [line.strip() for line in handle if line.strip()]
 

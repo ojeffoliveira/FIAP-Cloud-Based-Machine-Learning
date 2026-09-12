@@ -1,12 +1,12 @@
-# SageMaker training job - the bootstrap that produces the single model
-# artifact every serving mode below will consume.
+# Training job do SageMaker - o bootstrap que produz o único artefato de modelo
+# que todo modo de serving abaixo vai consumir.
 #
-# Same two behaviours validated in 02-ml-system, provider 6.60.0:
-#   1. create returns as soon as the job reaches InProgress - the artifact
-#      only exists once scripts/lab.py wait-training polls to Completed;
-#   2. s3_data_distribution_type must be explicit on every channel, or the
-#      provider sends "ShardedByS3Key" and the apply fails afterwards with
-#      "Provider produced inconsistent result after apply".
+# Os mesmos dois comportamentos validados no 02-ml-system, provider 6.60.0:
+#   1. o create retorna assim que o job entra em InProgress - o artefato só
+#      existe depois que scripts/lab.py wait-training consulta até Completed;
+#   2. o s3_data_distribution_type precisa ser explícito em todo canal, senão o
+#      provider envia "ShardedByS3Key" e o apply falha depois com "Provider
+#      produced inconsistent result after apply".
 resource "aws_sagemaker_training_job" "churn" {
   training_job_name = local.training_job_name
   role_arn          = data.aws_iam_role.lab_role.arn
