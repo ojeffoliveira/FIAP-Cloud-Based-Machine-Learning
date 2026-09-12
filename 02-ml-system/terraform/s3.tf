@@ -1,14 +1,15 @@
-# The bucket belongs to Terraform - just not through the aws_s3_bucket resource.
+# O bucket pertence ao Terraform - só não através do recurso aws_s3_bucket.
 #
-# aws_s3_bucket reads GetBucketObjectLockConfiguration immediately after
-# CreateBucket, and the AWS Academy SCP denies that call with an explicit deny.
-# The bucket is created and the apply fails anyway; no lifecycle block, provider
-# version or -refresh=false skips that read, because it happens inside Create.
+# O aws_s3_bucket lê GetBucketObjectLockConfiguration imediatamente depois do
+# CreateBucket, e a SCP do AWS Academy nega essa chamada com deny explícito. O
+# bucket é criado e o apply falha do mesmo jeito; nenhum bloco lifecycle, versão
+# de provider ou -refresh=false pula essa leitura, porque ela acontece dentro do
+# Create.
 #
-# terraform_data keeps ownership where the lab needs it: the name lives in state,
-# every upload below still waits for the bucket through the dependency graph, and
-# `terraform destroy` removes it. What is lost is drift detection - if someone
-# deletes the bucket outside Terraform, the next plan will not notice.
+# O terraform_data mantém a posse onde o lab precisa: o nome vive no state, todo
+# upload abaixo continua esperando o bucket pelo grafo de dependências, e o
+# `terraform destroy` remove ele. O que se perde é a detecção de drift - se alguém
+# apagar o bucket fora do Terraform, o próximo plan não vai notar.
 resource "terraform_data" "bucket" {
   input = local.bucket_name
 
@@ -21,24 +22,24 @@ resource "terraform_data" "bucket" {
         aws s3api wait bucket-exists --bucket ${self.input}
       fi
 
-      # provider default_tags never reach a bucket the CLI created, so the tag set
-      # travels explicitly. Best effort on purpose: if the account's SCP also denies
-      # PutBucketTagging, an untagged bucket is a far better outcome for the student
-      # than a failed apply.
+      # o default_tags do provider nunca alcança um bucket que a CLI criou, então o
+      # conjunto de tags viaja explicitamente. Tolerante a falha de propósito: se a
+      # SCP da conta também negar PutBucketTagging, um bucket sem tag é um desfecho
+      # muito melhor para o aluno que um apply reprovado.
       aws s3api put-bucket-tagging \
         --bucket ${self.input} \
         --tagging '${local.bucket_tagging_json}' > /dev/null ||
-        echo "warning: could not tag the bucket (likely denied by an SCP); continuing" >&2
+        echo "aviso: não foi possível aplicar as tags no bucket (provavelmente negado por uma SCP); seguindo" >&2
     EOT
   }
 
-  # Destroy-time provisioners may reference nothing but `self`, which is why the
-  # bucket name is carried in `input` instead of being recomputed here.
+  # Provisioner de destroy não pode referenciar nada além de `self`, e é por isso
+  # que o nome do bucket é carregado em `input` em vez de ser recalculado aqui.
   #
-  # `rb --force` empties before deleting: model.tar.gz is written by SageMaker,
-  # not by any aws_s3_object, so a plain DeleteBucket would fail on a non-empty
-  # bucket. The head-bucket guard keeps `make destroy` green when the bucket is
-  # already gone.
+  # O `rb --force` esvazia antes de apagar: o model.tar.gz é escrito pelo
+  # SageMaker, não por um aws_s3_object, então um DeleteBucket puro falharia num
+  # bucket não vazio. A guarda com head-bucket mantém o `make destroy` verde
+  # quando o bucket já não existe.
   provisioner "local-exec" {
     when        = destroy
     interpreter = ["/bin/bash", "-c"]
@@ -70,8 +71,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "lab" {
   }
 }
 
-# Uploading through Terraform (instead of `aws s3 cp`) puts the data in the
-# dependency graph: the training job cannot start before the bytes it reads exist.
+# Subir pelo Terraform (em vez de `aws s3 cp`) coloca o dado no grafo de
+# dependências: o training job não pode começar antes de os bytes que ele lê
+# existirem.
 resource "aws_s3_object" "train" {
   bucket = terraform_data.bucket.output
   key    = "${local.s3_prefixes.train}/train.csv"
@@ -90,8 +92,8 @@ resource "aws_s3_object" "validation" {
   content_type = "text/csv"
 }
 
-# Metadata travels with the data. Anyone auditing the bucket can tell which
-# dataset produced which model without reading this repository.
+# O metadado viaja junto com o dado. Quem auditar o bucket consegue dizer qual
+# dataset produziu qual modelo sem ler este repositório.
 resource "aws_s3_object" "manifest" {
   bucket = terraform_data.bucket.output
   key    = "${local.s3_prefixes.metadata}/dataset_manifest.json"

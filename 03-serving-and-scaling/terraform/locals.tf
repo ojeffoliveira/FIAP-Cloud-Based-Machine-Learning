@@ -1,8 +1,9 @@
-# One random suffix per lifecycle, kept in state. SageMaker refuses to reuse a
-# job/model/endpoint name that exists in history, so a fresh suffix per
-# lifecycle is the minimum non-determinism needed for `make apply` to be
-# repeatable without manual edits. Bucket name stays deterministic (account ID
-# is already globally unique) so `verify-clean` can find it by prefix alone.
+# Um sufixo aleatório por ciclo de vida, guardado no state. O SageMaker recusa
+# reutilizar um nome de job/model/endpoint que exista no histórico, então um
+# sufixo novo por ciclo de vida é o mínimo de não-determinismo necessário para o
+# `make apply` ser repetível sem edição manual. O nome do bucket continua
+# determinístico (o ID da conta já é globalmente único), para o `verify-clean`
+# achá-lo só pelo prefixo.
 resource "random_id" "lifecycle" {
   byte_length = 4
 }
@@ -44,8 +45,9 @@ locals {
   realtime_variant_resource_id = "endpoint/${local.realtime_endpoint_name}/variant/AllTraffic"
   async_variant_resource_id    = "endpoint/${local.async_endpoint_name}/variant/AllTraffic"
 
-  # Exact tag set required by the spec - separate from the free-form course
-  # tags used elsewhere, kept literal so cost/inventory reports can filter on it.
+  # Conjunto exato de tags exigido pela spec - separado das tags livres da
+  # disciplina usadas em outros pontos, mantido literal para relatórios de custo e
+  # de inventário conseguirem filtrar por ele.
   tags = {
     Project   = "FIAP-Cloud-Based-Machine-Learning"
     Lab       = "03-serving-and-scaling"
@@ -53,9 +55,9 @@ locals {
     Owner     = "student"
   }
 
-  # Same tag set in the shape the S3 API expects, for the bucket the CLI creates
-  # (see s3.tf) - provider default_tags only reach resources the provider itself
-  # creates.
+  # O mesmo conjunto de tags no formato que a API do S3 espera, para o bucket que
+  # a CLI cria (veja s3.tf) - o default_tags do provider só alcança recursos que o
+  # próprio provider cria.
   bucket_tagging_json = jsonencode({
     TagSet = [for k, v in local.tags : { Key = k, Value = v }]
   })

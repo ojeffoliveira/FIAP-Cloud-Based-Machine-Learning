@@ -1,11 +1,11 @@
-# Credentials never enter this repository.
+# Credencial nunca entra neste repositório.
 .env
 .env.*
 .aws/
 *.pem
 *.ppk
 
-# Terraform state describes live infrastructure and can contain sensitive values.
+# O state do Terraform descreve infraestrutura viva e pode conter valor sensível.
 terraform.tfstate
 terraform.tfstate.*
 .terraform/
@@ -13,10 +13,10 @@ terraform.tfvars
 crash.log
 crash.*.log
 
-# Handoff file written by scripts/lab.py during `make apply`.
+# Arquivo de passagem de bastão, escrito por scripts/lab.py no `make apply`.
 terraform/artifact.auto.tfvars.json
 
-# Everything generated at runtime.
+# Tudo que é gerado em tempo de execução.
 artifacts/
 build/
 

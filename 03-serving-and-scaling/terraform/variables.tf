@@ -1,68 +1,68 @@
 variable "region" {
-  description = "AWS region. The Academy Learner Lab, and the XGBoost image URI used here, are validated only in us-east-1."
+  description = "Região da AWS. O Academy Learner Lab, e a URI da imagem do XGBoost usada aqui, são validados só em us-east-1."
   type        = string
   default     = "us-east-1"
 
   validation {
     condition     = var.region == "us-east-1"
-    error_message = "This lab is validated only in us-east-1."
+    error_message = "Este lab é validado só em us-east-1."
   }
 }
 
 variable "project_prefix" {
-  description = "Short semantic prefix for every resource name. Mirrored in config/lab.yaml."
+  description = "Prefixo semântico curto para todo nome de recurso. Espelhado em config/lab.yaml."
   type        = string
   default     = "prb-cloud-ml-lab2"
 
   validation {
     condition     = can(regex("^[a-z0-9-]{3,32}$", var.project_prefix))
-    error_message = "Prefix must be lowercase letters, digits and hyphens (S3 and SageMaker naming)."
+    error_message = "O prefixo precisa ser letras minúsculas, dígitos e hifens (regra de nome do S3 e do SageMaker)."
   }
 }
 
 variable "execution_role_name" {
-  description = "Pre-provisioned Academy role. The lab is not allowed to create IAM roles."
+  description = "Role já provisionada pelo Academy. O lab não tem permissão para criar role de IAM."
   type        = string
   default     = "LabRole"
 }
 
 variable "data_dir" {
-  description = "Directory holding the generated dataset uploaded to S3."
+  description = "Diretório com o dataset gerado que sobe para o S3."
   type        = string
   default     = "../artifacts/data"
 }
 
 variable "training_image" {
-  description = "Managed SageMaker built-in XGBoost image. Training and all three serving modes share it."
+  description = "Imagem gerenciada do XGBoost nativo do SageMaker. O treino e os três modos de serving compartilham a mesma."
   type        = string
   default     = "683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-xgboost:1.7-1"
 }
 
 variable "instance_type" {
-  description = "Instance type for training, real-time and async variants."
+  description = "Tipo de instância para o treino e para as variants real-time e async."
   type        = string
   default     = "ml.m5.large"
 }
 
 variable "volume_size_in_gb" {
-  description = "Training EBS volume."
+  description = "Volume EBS do treino."
   type        = number
   default     = 30
 }
 
 variable "max_runtime_in_seconds" {
-  description = "Hard stop for the training job, so a hung run cannot drain the lab budget."
+  description = "Parada dura do training job, para uma execução travada não drenar o crédito do lab."
   type        = number
   default     = 900
 
   validation {
     condition     = var.max_runtime_in_seconds >= 600 && var.max_runtime_in_seconds <= 900
-    error_message = "Keep the stopping condition between 600 and 900 seconds."
+    error_message = "Mantenha a condição de parada entre 600 e 900 segundos."
   }
 }
 
 variable "hyperparameters" {
-  description = "Built-in XGBoost hyperparameters. Values are strings, as the API requires."
+  description = "Hiperparâmetros do XGBoost nativo. Os valores são strings, como a API exige."
   type        = map(string)
   default = {
     objective        = "binary:logistic"
@@ -77,14 +77,14 @@ variable "hyperparameters" {
 }
 
 # --------------------------------------------------------------------------- #
-# Two-stage handoff (same pattern validated in 02-ml-system)
+# Passagem de bastão entre os dois estágios (o mesmo padrão validado no 02-ml-system)
 # --------------------------------------------------------------------------- #
 
 variable "deploy_serving" {
   description = <<-EOT
-    Stage gate. False creates storage + training only; true additionally
-    creates the Model and the three EndpointConfigs/Endpoints + autoscaling.
-    `make apply` flips it automatically once the artifact has been proven.
+    Portão de estágio. Com false, cria só storage + treino; com true, cria também
+    o Model e as três EndpointConfigs/Endpoints + autoscaling. O `make apply` vira
+    essa chave automaticamente depois de o artefato ser comprovado.
   EOT
   type        = bool
   default     = false
@@ -92,16 +92,16 @@ variable "deploy_serving" {
 
 variable "model_artifact_uri" {
   description = <<-EOT
-    Authoritative S3 URI of model.tar.gz, taken from DescribeTrainingJob by
-    scripts/lab.py wait-training and written to artifact.auto.tfvars.json.
-    Never a path assembled by hand.
+    URI autoritativa do model.tar.gz no S3, obtida do DescribeTrainingJob pelo
+    scripts/lab.py wait-training e escrita em artifact.auto.tfvars.json. Nunca um
+    caminho montado à mão.
   EOT
   type        = string
   default     = ""
 
   validation {
     condition     = var.model_artifact_uri == "" || can(regex("^s3://[a-z0-9.-]+/.+\\.tar\\.gz$", var.model_artifact_uri))
-    error_message = "model_artifact_uri must be empty or an s3:// URI ending in .tar.gz."
+    error_message = "model_artifact_uri precisa estar vazio ou ser uma URI s3:// terminando em .tar.gz."
   }
 }
 
@@ -120,7 +120,7 @@ variable "realtime_max_capacity" {
 }
 
 variable "realtime_target_invocations_per_instance" {
-  description = "Target for SageMakerVariantInvocationsPerInstance target tracking."
+  description = "Alvo do target tracking em SageMakerVariantInvocationsPerInstance."
   type        = number
   default     = 60
 }
@@ -169,7 +169,7 @@ variable "async_max_capacity" {
 }
 
 variable "async_target_backlog_per_instance" {
-  description = "Target for the ApproximateBacklogSizePerInstance target-tracking policy."
+  description = "Alvo da política de target tracking em ApproximateBacklogSizePerInstance."
   type        = number
   default     = 5
 }

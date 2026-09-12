@@ -1,12 +1,12 @@
-# Credentials never enter this repository. Academy credentials live in the
-# environment or in an AWS profile outside the working tree.
+# Credencial nunca entra neste repositório. As credenciais do Academy vivem no
+# ambiente ou num profile da AWS fora da árvore de trabalho.
 .env
 .env.*
 .aws/
 *.pem
 *.ppk
 
-# Terraform state describes live infrastructure and can contain sensitive values.
+# O state do Terraform descreve infraestrutura viva e pode conter valor sensível.
 terraform.tfstate
 terraform.tfstate.*
 .terraform/
@@ -14,10 +14,10 @@ terraform.tfvars
 crash.log
 crash.*.log
 
-# Handoff file written by scripts/wait_training.py during `make apply`.
+# Arquivo de passagem de bastão, escrito por scripts/wait_training.py no `make apply`.
 terraform/artifact.auto.tfvars.json
 
-# Everything generated at runtime: dataset, predictions, evidence.
+# Tudo que é gerado em tempo de execução: dataset, predições, evidências.
 artifacts/
 build/
 

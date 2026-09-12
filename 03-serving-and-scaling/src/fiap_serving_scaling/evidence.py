@@ -1,6 +1,6 @@
-"""Consolidates the evidence dossier in artifacts/evidence/ from the JSON
-results each command already wrote, plus a fresh resources.json snapshot
-pulled straight from the AWS APIs (never from Terraform state).
+"""Consolida o dossiê de evidências em artifacts/evidence/ a partir dos resultados
+JSON que cada comando já escreveu, mais um snapshot novo em resources.json puxado
+direto das APIs da AWS (nunca do state do Terraform).
 """
 
 from __future__ import annotations
@@ -126,26 +126,26 @@ def build_summary(evidence_dir: Path, resources: dict[str, Any]) -> dict[str, An
 
 def render_markdown(summary: dict[str, Any]) -> str:
     lines = [
-        "# Evidence — Lab 03 Serving and Scaling",
+        "# Evidências — Lab 03 Serving and Scaling",
         "",
-        "One model, four serving contracts. Each line below is checkable against "
-        "a live AWS API call, not against a screenshot.",
+        "Um modelo, quatro contratos de serving. Cada linha abaixo é conferível "
+        "contra uma chamada de API da AWS ao vivo, não contra um print.",
         "",
-        "## Chain",
+        "## Cadeia",
         "",
         "| Elo | Status |",
         "|---|---|",
     ]
     labels = {
         "training_completed": "Training bootstrap concluído",
-        "artifact_uri_from_describe_training_job": "Artifact URI veio de DescribeTrainingJob",
+        "artifact_uri_from_describe_training_job": "URI do artefato veio do DescribeTrainingJob",
         "realtime_in_service": "Real-time endpoint InService",
         "serverless_in_service": "Serverless endpoint InService",
         "async_in_service": "Async endpoint InService",
-        "predictions_match_realtime_serverless": "Predictions equivalentes real-time vs serverless",
-        "async_output_count_matches_input": "Async: output count == input count",
-        "batch_produced_600_predictions": "Batch Transform: 600 predictions",
-        "load_success_rate_over_threshold": "Load test: success rate >= 99% em todos os níveis",
+        "predictions_match_realtime_serverless": "Predições equivalentes entre real-time e serverless",
+        "async_output_count_matches_input": "Async: contagem de saída == contagem de entrada",
+        "batch_produced_600_predictions": "Batch Transform: 600 predições",
+        "load_success_rate_over_threshold": "Teste de carga: taxa de sucesso >= 99% em todos os níveis",
         "scale_demo_proved_1_2_1": "Scale-demo: 1 -> 2 -> 1 provado pela API",
     }
     for key, label in labels.items():
@@ -154,7 +154,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
 
     lines += [
         "",
-        f"**Chain complete: {'yes' if summary['chain_complete'] else 'no'}**",
+        f"**Cadeia completa: {'sim' if summary['chain_complete'] else 'não'}**",
         "",
     ]
     return "\n".join(lines)
@@ -166,4 +166,4 @@ def write_evidence(evidence_dir: Path, summary: dict[str, Any]) -> None:
         json.dump(json_safe(summary), handle, indent=2, sort_keys=True)
     with open(evidence_dir / "summary.md", "w", encoding="utf-8") as handle:
         handle.write(render_markdown(summary))
-    log(f"[evidence] wrote {evidence_dir / 'summary.json'} and summary.md")
+    log(f"[evidence] escrevi {evidence_dir / 'summary.json'} e summary.md")

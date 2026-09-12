@@ -1,18 +1,18 @@
-"""Executable data contract.
+"""Contrato de dados executável.
 
-The contract is not prose in a README: it is the set of assertions below, run by
-`scripts/validate_data.py` *before* any AWS resource is created.
-A dataset that violates it never reaches S3, so a failed training job can never
-be blamed on data nobody checked.
+O contrato não é texto num README: é o conjunto de asserções abaixo, executado
+por `scripts/validate_data.py` *antes* de qualquer recurso da AWS ser criado.
+Um dataset que viola o contrato nunca chega ao S3, então um training job que
+falha não pode ser culpa de dado que ninguém conferiu.
 
-Two audiences are served by the same code:
+O mesmo código atende duas audiências:
 
-- the training contract - headerless CSV, label in the first column;
-- the serving contract - headerless CSV, no label, exact feature order.
+- o contrato de treino - CSV sem cabeçalho, rótulo na primeira coluna;
+- o contrato de serving - CSV sem cabeçalho, sem rótulo, ordem exata de features.
 
-Anything that serialises a row for the endpoint goes through
-`serialize_features` here, so the payload sent in production cannot drift from
-the payload asserted in the tests.
+Tudo que serializa uma linha para o endpoint passa por `serialize_features` aqui,
+então o payload enviado em produção não consegue divergir do payload verificado
+nos testes.
 """
 
 from __future__ import annotations
@@ -35,11 +35,11 @@ from lab1.config import (
 )
 from lab1.dataset import DECIMALS, sha256_file
 
-# Deterministic smoke records. Their only job is to prove the serving path is
-# alive and directionally sane: the DGP makes the first record far riskier than
-# the second, so a healthy model must score them in that order. The check is an
-# ordering, not a fixed probability, because the trained model is allowed to
-# calibrate differently than the generator.
+# Registros de smoke determinísticos. A única função deles é provar que o caminho
+# de serving está vivo e coerente na direção: o processo gerador faz o primeiro
+# registro muito mais arriscado que o segundo, então um modelo saudável precisa
+# pontuá-los nessa ordem. A verificação é de ordenação, não de probabilidade
+# fixa, porque o modelo treinado pode calibrar diferente do gerador.
 SMOKE_RECORDS: tuple[dict[str, Any], ...] = (
     {
         "name": "high_risk",
@@ -69,7 +69,7 @@ SMOKE_RECORDS: tuple[dict[str, Any], ...] = (
 
 
 class ContractError(AssertionError):
-    """Raised when a data-contract check fails hard (not part of a report run)."""
+    """Levantada quando uma verificação do contrato falha de forma dura."""
 
 
 @dataclass
@@ -107,53 +107,53 @@ class Report:
 
 
 # --------------------------------------------------------------------------- #
-# Serialisation - the single source of truth for what leaves for the endpoint
+# Serialização - a fonte única de verdade sobre o que sai para o endpoint
 # --------------------------------------------------------------------------- #
 
 
 def _format_value(column: str, value: Any) -> str:
     if value is None or (isinstance(value, float) and not math.isfinite(value)):
-        raise ContractError(f"feature {column!r} is not a finite number: {value!r}")
+        raise ContractError(f"a feature {column!r} não é um número finito: {value!r}")
     decimals = DECIMALS[column]
     if decimals == 0:
         as_int = int(value)
         if float(value) != float(as_int):
-            raise ContractError(f"feature {column!r} must be integral, got {value!r}")
+            raise ContractError(f"a feature {column!r} precisa ser inteira, veio {value!r}")
         return str(as_int)
     return f"{float(value):.{decimals}f}"
 
 
 def serialize_features(cfg: LabConfig, record: Mapping[str, Any]) -> str:
-    """One headerless CSV line: features only, exact order, no label and no ID."""
+    """Uma linha de CSV sem cabeçalho: só features, na ordem exata, sem rótulo e sem ID."""
     missing = [f for f in cfg.feature_order if f not in record]
     if missing:
-        raise ContractError(f"record is missing features: {missing}")
+        raise ContractError(f"o registro está sem as features: {missing}")
     forbidden = [k for k in (cfg.label, cfg.id_column) if k in record]
     if forbidden:
-        raise ContractError(f"inference payload must not carry {forbidden}")
+        raise ContractError(f"o payload de inferência não pode carregar {forbidden}")
     unexpected = sorted(set(record) - set(cfg.feature_order))
     if unexpected:
-        raise ContractError(f"record has unknown columns: {unexpected}")
+        raise ContractError(f"o registro tem colunas desconhecidas: {unexpected}")
     return ",".join(_format_value(f, record[f]) for f in cfg.feature_order)
 
 
 def serialize_payload(cfg: LabConfig, records: Iterable[Mapping[str, Any]]) -> str:
-    """Multi-row body for a batched invocation - newline separated, no trailing newline."""
+    """Corpo de várias linhas para uma invocação em lote - separado por newline, sem newline final."""
     lines = [serialize_features(cfg, r) for r in records]
     if not lines:
-        raise ContractError("refusing to build an empty payload")
+        raise ContractError("recusando montar um payload vazio")
     return "\n".join(lines)
 
 
 def smoke_payload(cfg: LabConfig) -> tuple[list[str], str]:
-    """Names and body of the deterministic smoke request."""
+    """Nomes e corpo da requisição de smoke determinística."""
     names = [r["name"] for r in SMOKE_RECORDS]
     body = serialize_payload(cfg, (r["features"] for r in SMOKE_RECORDS))
     return names, body
 
 
 # --------------------------------------------------------------------------- #
-# File readers
+# Leitores de arquivo
 # --------------------------------------------------------------------------- #
 
 
@@ -165,7 +165,7 @@ def _read_rows(path: Path) -> list[list[str]]:
 def read_source(path: Path) -> tuple[list[str], list[list[str]]]:
     rows = _read_rows(path)
     if not rows:
-        raise ContractError(f"{path.name} is empty")
+        raise ContractError(f"{path.name} está vazio")
     return rows[0], rows[1:]
 
 
@@ -181,7 +181,7 @@ def _looks_like_header(row: Sequence[str]) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Contract checks
+# Verificações do contrato
 # --------------------------------------------------------------------------- #
 
 
@@ -190,8 +190,8 @@ def check_source(cfg: LabConfig, schema: dict[str, Any], data: Path, report: Rep
     expected = [cfg.id_column, *cfg.feature_order, cfg.label]
     header, rows = read_source(path)
 
-    report.add("source.header_exact", header == expected, f"{header} vs expected {expected}")
-    report.add("source.row_count", len(rows) == cfg.rows, f"{len(rows)} rows, expected {cfg.rows}")
+    report.add("source.header_exact", header == expected, f"{header} vs esperado {expected}")
+    report.add("source.row_count", len(rows) == cfg.rows, f"{len(rows)} linhas, esperado {cfg.rows}")
 
     index = {name: i for i, name in enumerate(header)}
     ids: list[int] = []
@@ -204,43 +204,43 @@ def check_source(cfg: LabConfig, schema: dict[str, Any], data: Path, report: Rep
 
     for line_number, row in enumerate(rows, start=2):
         if len(row) != len(expected):
-            report.add("source.column_count", False, f"line {line_number} has {len(row)} columns")
+            report.add("source.column_count", False, f"a linha {line_number} tem {len(row)} colunas")
             return
         ids.append(int(row[index[cfg.id_column]]))
         label_values.add(row[index[cfg.label]])
         for feature in cfg.feature_order:
             raw = row[index[feature]]
             if not _is_float(raw):
-                non_finite.append(f"line {line_number} {feature}={raw!r}")
+                non_finite.append(f"linha {line_number} {feature}={raw!r}")
                 continue
             value = float(raw)
             low, high = bounds[feature]
             if not (low <= value <= high):
-                out_of_range.append(f"line {line_number} {feature}={value} outside [{low},{high}]")
+                out_of_range.append(f"linha {line_number} {feature}={value} fora de [{low},{high}]")
             if columns[feature]["dtype"] == "int64" and value != int(value):
-                non_integral.append(f"line {line_number} {feature}={value}")
+                non_integral.append(f"linha {line_number} {feature}={value}")
 
-    report.add("source.column_count", True, f"all rows have {len(expected)} columns")
-    report.add("source.no_nan_or_inf", not non_finite, "; ".join(non_finite[:5]) or "none found")
+    report.add("source.column_count", True, f"todas as linhas têm {len(expected)} colunas")
+    report.add("source.no_nan_or_inf", not non_finite, "; ".join(non_finite[:5]) or "nenhum encontrado")
     report.add(
         "source.label_binary",
         label_values <= {"0", "1"},
-        f"{cfg.label} values present: {sorted(label_values)}",
+        f"valores de {cfg.label} presentes: {sorted(label_values)}",
     )
     report.add(
         "source.integer_columns",
         not non_integral,
-        "; ".join(non_integral[:5]) or "int/binary columns hold integral values",
+        "; ".join(non_integral[:5]) or "colunas int/binárias contêm valores inteiros",
     )
     report.add(
         "source.numeric_ranges",
         not out_of_range,
-        "; ".join(out_of_range[:5]) or "all features inside documented bounds",
+        "; ".join(out_of_range[:5]) or "todas as features dentro dos limites documentados",
     )
     report.add(
         "source.unique_observation_id",
         len(set(ids)) == len(ids),
-        f"{len(ids) - len(set(ids))} duplicate ids",
+        f"{len(ids) - len(set(ids))} ids duplicados",
     )
 
     positives = sum(1 for r in rows if r[index[cfg.label]] == "1")
@@ -249,11 +249,11 @@ def check_source(cfg: LabConfig, schema: dict[str, Any], data: Path, report: Rep
     report.add(
         "source.prevalence_in_range",
         low <= observed <= high,
-        f"prevalence {observed:.4f} expected within [{low},{high}]",
+        f"prevalência {observed:.4f}, esperada dentro de [{low},{high}]",
     )
     binary_features = [f for f in cfg.feature_order if columns[f].get("unit") == "binary"]
     if not binary_features:
-        raise ContractError("schema.json declares no binary feature - the contract lost a column")
+        raise ContractError("o schema.json não declara nenhuma feature binária - o contrato perdeu uma coluna")
     bad_binary = [
         f
         for f in binary_features
@@ -262,7 +262,7 @@ def check_source(cfg: LabConfig, schema: dict[str, Any], data: Path, report: Rep
     report.add(
         "source.binary_features",
         not bad_binary,
-        f"binary features checked: {binary_features}; violations: {bad_binary}",
+        f"features binárias conferidas: {binary_features}; violações: {bad_binary}",
     )
 
 
@@ -284,38 +284,38 @@ def check_model_files(cfg: LabConfig, data: Path, report: Report) -> dict[str, l
         report.add(
             f"{filename}.no_header",
             bool(rows) and not _looks_like_header(rows[0]),
-            f"first row: {rows[0][:3] if rows else 'EMPTY'}",
+            f"primeira linha: {rows[0][:3] if rows else 'VAZIO'}",
         )
         widths = {len(r) for r in rows}
         report.add(
             f"{filename}.column_count",
             widths == {expected_columns},
-            f"widths {sorted(widths)}, expected {{{expected_columns}}}",
+            f"larguras {sorted(widths)}, esperado {{{expected_columns}}}",
         )
         report.add(
             f"{filename}.min_rows",
             len(rows) >= cfg.min_rows_per_split,
-            f"{len(rows)} rows, minimum {cfg.min_rows_per_split}",
+            f"{len(rows)} linhas, mínimo {cfg.min_rows_per_split}",
         )
         report.add(
             f"{filename}.all_numeric",
             all(_is_float(cell) for r in rows for cell in r),
-            "every cell parses as a finite float",
+            "toda célula converte para float finito",
         )
         if label_present:
             first_column = {r[0] for r in rows if r}
             report.add(
                 f"{filename}.label_first_binary",
                 first_column <= {"0", "1"},
-                f"first column values {sorted(first_column)} - label position is column 0",
+                f"valores da primeira coluna {sorted(first_column)} - o rótulo é a coluna 0",
             )
         else:
-            # A label leaking into the inference file would show up as an extra
-            # column; width already covers it, so assert intent explicitly.
+            # Um rótulo vazando para o arquivo de inferência apareceria como coluna
+            # extra; a largura já cobre isso, então aqui a intenção fica explícita.
             report.add(
                 f"{filename}.no_label_column",
                 widths == {n_features},
-                f"exactly {n_features} feature columns, no label",
+                f"exatamente {n_features} colunas de feature, sem rótulo",
             )
     return parsed
 
@@ -330,12 +330,12 @@ def check_split_integrity(cfg: LabConfig, data: Path, report: Report) -> None:
     report.add(
         "manifest.schema_version",
         manifest.get("schema_version") == cfg.schema_version,
-        f"{manifest.get('schema_version')} vs config {cfg.schema_version}",
+        f"{manifest.get('schema_version')} vs configuração {cfg.schema_version}",
     )
     report.add(
         "manifest.seed",
         manifest.get("seed") == cfg.seed,
-        f"seed {manifest.get('seed')}",
+        f"semente {manifest.get('seed')}",
     )
     report.add(
         "manifest.feature_order",
@@ -349,7 +349,7 @@ def check_split_integrity(cfg: LabConfig, data: Path, report: Report) -> None:
     report.add(
         "manifest.fingerprints_present",
         all(isinstance(v, str) and len(v) == 64 for v in fingerprints.values()),
-        f"sha256 recorded for {sorted(fingerprints)}",
+        f"sha256 registrado para {sorted(fingerprints)}",
     )
 
     on_disk = {
@@ -366,11 +366,11 @@ def check_split_integrity(cfg: LabConfig, data: Path, report: Report) -> None:
     report.add(
         "manifest.fingerprints_match_files",
         not mismatched,
-        f"mismatched: {mismatched}" if mismatched else "manifest matches bytes on disk",
+        f"divergentes: {mismatched}" if mismatched else "o manifesto casa com os bytes em disco",
     )
 
-    # Disjointness is proven from the ID columns actually written, not from the
-    # in-memory split object - the files are what S3 will see.
+    # A disjunção é provada a partir das colunas de ID realmente escritas, não do
+    # objeto de split em memória - os arquivos são o que o S3 vai ver.
     header, source_rows = read_source(data / SOURCE_FILE)
     id_index = header.index(cfg.id_column)
     label_index = header.index(cfg.label)
@@ -380,22 +380,22 @@ def check_split_integrity(cfg: LabConfig, data: Path, report: Report) -> None:
     report.add(
         "test_labels.header",
         bool(test_label_rows) and test_label_rows[0] == [cfg.id_column, cfg.label],
-        f"header {test_label_rows[0] if test_label_rows else 'EMPTY'}",
+        f"cabeçalho {test_label_rows[0] if test_label_rows else 'VAZIO'}",
     )
     test_ids = {int(r[0]) for r in test_label_rows[1:]}
     report.add(
         "test_labels.rows_match_features",
         len(test_ids) == len(_read_rows(data / MODEL_TEST_FEATURES_FILE)),
-        f"{len(test_ids)} labelled ids vs feature rows",
+        f"{len(test_ids)} ids rotulados vs linhas de features",
     )
     report.add(
         "test_labels.ids_from_source",
         test_ids <= set(source_ids),
-        "every test id exists in source.csv",
+        "todo id de teste existe no source.csv",
     )
 
-    # Train and validation carry no IDs by design, so disjointness is proven by
-    # reconstructing them from the manifest row counts plus the label columns.
+    # Treino e validação não carregam IDs por design, então a disjunção é provada
+    # reconstruindo-os a partir das contagens do manifesto mais as colunas de rótulo.
     split_rows = {
         "train": len(_read_rows(data / MODEL_TRAIN_FILE)),
         "validation": len(_read_rows(data / MODEL_VALIDATION_FILE)),
@@ -404,14 +404,14 @@ def check_split_integrity(cfg: LabConfig, data: Path, report: Report) -> None:
     report.add(
         "splits.partition_source",
         sum(split_rows.values()) == len(source_rows),
-        f"{split_rows} sums to {sum(split_rows.values())} of {len(source_rows)} source rows",
+        f"{split_rows} soma {sum(split_rows.values())} de {len(source_rows)} linhas do source",
     )
     for name, count in split_rows.items():
         declared = manifest.get("splits", {}).get(name, {}).get("rows")
         report.add(
             f"splits.{name}.rows_match_manifest",
             declared == count,
-            f"manifest {declared} vs file {count}",
+            f"manifesto {declared} vs arquivo {count}",
         )
 
     source_label_by_id = {int(r[id_index]): r[label_index] for r in source_rows}
@@ -422,12 +422,12 @@ def check_split_integrity(cfg: LabConfig, data: Path, report: Report) -> None:
     report.add(
         "test_labels.consistent_with_source",
         not label_mismatch,
-        f"{len(label_mismatch)} labels disagree with source.csv",
+        f"{len(label_mismatch)} rótulos discordam do source.csv",
     )
 
 
 def check_payload_contract(cfg: LabConfig, data: Path, report: Report) -> None:
-    """Round-trip: a source row serialised for inference must equal the file row."""
+    """Ida e volta: uma linha do source serializada para inferência tem que ser igual à do arquivo."""
     header, source_rows = read_source(data / SOURCE_FILE)
     index = {name: i for i, name in enumerate(header)}
     feature_rows = _read_rows(data / MODEL_TEST_FEATURES_FILE)
@@ -438,9 +438,10 @@ def check_payload_contract(cfg: LabConfig, data: Path, report: Report) -> None:
     for observation_id, file_row in zip(test_ids, feature_rows):
         source_row = by_id.get(observation_id)
         if source_row is None:
-            # Happens when source.csv has duplicate IDs; source.unique_observation_id
-            # already reports that, so record it here without crashing the report.
-            mismatches.append(f"id {observation_id}: not resolvable in source.csv")
+            # Acontece quando o source.csv tem IDs duplicados; a verificação
+            # source.unique_observation_id já reporta isso, então aqui registramos
+            # sem derrubar o relatório.
+            mismatches.append(f"id {observation_id}: não resolvível no source.csv")
             break
         record = {f: float(source_row[index[f]]) for f in cfg.feature_order}
         rebuilt = serialize_features(cfg, record)
@@ -451,7 +452,7 @@ def check_payload_contract(cfg: LabConfig, data: Path, report: Report) -> None:
     report.add(
         "payload.roundtrip_matches_file",
         not mismatches,
-        "; ".join(mismatches) or f"{len(feature_rows)} rows re-serialise byte-identically",
+        "; ".join(mismatches) or f"{len(feature_rows)} linhas re-serializam byte a byte",
     )
 
     names, body = smoke_payload(cfg)
@@ -460,12 +461,12 @@ def check_payload_contract(cfg: LabConfig, data: Path, report: Report) -> None:
         "payload.smoke_shape",
         len(lines) == len(SMOKE_RECORDS)
         and all(len(line.split(",")) == len(cfg.feature_order) for line in lines),
-        f"smoke records {names} -> {len(lines)} lines of {len(cfg.feature_order)} columns",
+        f"registros de smoke {names} -> {len(lines)} linhas de {len(cfg.feature_order)} colunas",
     )
 
 
 def validate(cfg: LabConfig, schema: dict[str, Any], data: Path) -> Report:
-    """Run every contract check and return the report (never raises on violation)."""
+    """Roda todas as verificações e devolve o relatório (nunca levanta exceção por violação)."""
     report = Report()
     required = [
         SOURCE_FILE,
@@ -479,7 +480,7 @@ def validate(cfg: LabConfig, schema: dict[str, Any], data: Path) -> Report:
     report.add(
         "files.present",
         not missing,
-        f"missing {missing} in {data}" if missing else f"all {len(required)} files present in {data}",
+        f"faltando {missing} em {data}" if missing else f"todos os {len(required)} arquivos presentes em {data}",
     )
     if missing:
         return report
@@ -501,7 +502,7 @@ def validate(cfg: LabConfig, schema: dict[str, Any], data: Path) -> Report:
     report.add(
         "schema.feature_order_matches_config",
         schema["feature_order"] == cfg.feature_order,
-        "schema.json and lab.yaml agree on feature order",
+        "schema.json e lab.yaml concordam na ordem das features",
     )
 
     check_source(cfg, schema, data, report)

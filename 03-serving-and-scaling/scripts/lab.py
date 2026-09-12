@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Single CLI surface for Lab 03 - Serving and Scaling.
+"""Superfície única de CLI do Lab 03 - Serving and Scaling.
 
-Every subcommand writes its structured result to stdout (JSON) and its
-narration to stderr, per the lab-wide convention. Subcommands map 1:1 to
-Makefile targets: doctor, data, validate-data, wait-training (internal to
-apply), status, compare, async, batch, load, scale-demo, evidence,
-verify-clean.
+Todo subcomando escreve o resultado estruturado em stdout (JSON) e a narração em
+stderr, conforme a convenção do lab. Os subcomandos mapeiam 1:1 para os alvos do
+Makefile: doctor, data, validate-data, wait-training (interno ao apply), status,
+compare, async, batch, load, scale-demo, evidence, verify-clean.
 """
 
 from __future__ import annotations
@@ -75,21 +74,21 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         readonly_checks["sagemaker_reachable"] = True
     except Exception as exc:  # noqa: BLE001
         readonly_checks["sagemaker_reachable"] = False
-        log(f"[warn] SageMaker read-only check failed: {exc}")
+        log(f"[aviso] a verificação somente-leitura do SageMaker falhou: {exc}")
 
     try:
         aws.client(session, "s3").list_buckets()
         readonly_checks["s3_reachable"] = True
     except Exception as exc:  # noqa: BLE001
         readonly_checks["s3_reachable"] = False
-        log(f"[warn] S3 read-only check failed: {exc}")
+        log(f"[aviso] a verificação somente-leitura do S3 falhou: {exc}")
 
     try:
         aws.client(session, "cloudwatch").describe_alarms(MaxRecords=1)
         readonly_checks["cloudwatch_reachable"] = True
     except Exception as exc:  # noqa: BLE001
         readonly_checks["cloudwatch_reachable"] = False
-        log(f"[warn] CloudWatch read-only check failed: {exc}")
+        log(f"[aviso] a verificação somente-leitura do CloudWatch falhou: {exc}")
 
     try:
         aws.client(session, "application-autoscaling").describe_scalable_targets(
@@ -98,7 +97,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         readonly_checks["application_autoscaling_reachable"] = True
     except Exception as exc:  # noqa: BLE001
         readonly_checks["application_autoscaling_reachable"] = False
-        log(f"[warn] Application Auto Scaling read-only check failed: {exc}")
+        log(f"[aviso] a verificação somente-leitura do Application Auto Scaling falhou: {exc}")
 
     result["checks"] = {
         "credentials_usable": True,
@@ -114,16 +113,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         result["checks"][k] for k in ("credentials_usable", "region_is_required_region", "execution_role_resolved")
     )
 
-    log("AWS preflight")
-    log(f"  account          : {identity['account_id']}")
-    log(f"  caller           : {aws.mask_arn(identity['arn'])}")
-    log(f"  region           : {session.region_name} (required {cfg.region})")
-    log(f"  execution role   : {aws.mask_arn(role_arn)}")
-    log(f"  lab bucket to use: {result['bucket_name']}")
+    log("Verificação prévia da AWS")
+    log(f"  conta            : {identity['account_id']}")
+    log(f"  chamador         : {aws.mask_arn(identity['arn'])}")
+    log(f"  região           : {session.region_name} (exigida {cfg.region})")
+    log(f"  role de execução : {aws.mask_arn(role_arn)}")
+    log(f"  bucket do lab    : {result['bucket_name']}")
     for key, value in readonly_checks.items():
-        log(f"  {key:<32}: {'ok' if value else 'FAILED (non-fatal)'}")
-    log("  credentials are never printed by this lab")
-    log(f"[{'PASS' if result['passed'] else 'FAIL'}] preflight")
+        log(f"  {key:<32}: {'ok' if value else 'FALHOU (não fatal)'}")
+    log("  este lab nunca imprime credencial")
+    log(f"[{'PASS' if result['passed'] else 'FAIL'}] verificação prévia")
 
     emit(result)
     return 0 if result["passed"] else 1
@@ -146,13 +145,13 @@ def cmd_validate_data(_args: argparse.Namespace) -> int:
     result = datamod.validate(cfg, DATA_DIR)
     for name, passed in result["checks"].items():
         log(f"  [{'PASS' if passed else 'FAIL'}] {name}")
-    log(f"[{'PASS' if result['passed'] else 'FAIL'}] data contract")
+    log(f"[{'PASS' if result['passed'] else 'FAIL'}] contrato de dados")
     emit(result)
     return 0 if result["passed"] else 1
 
 
 # --------------------------------------------------------------------------- #
-# wait-training (internal step of `make apply`)
+# wait-training (etapa interna do `make apply`)
 # --------------------------------------------------------------------------- #
 
 
@@ -165,7 +164,7 @@ def cmd_wait_training(args: argparse.Namespace) -> int:
     description = aws.wait_training_job(session, job_name, timeout_seconds=1200)
     status = description["TrainingJobStatus"]
     if status != "Completed":
-        raise aws.AwsError(f"training job {job_name} ended as {status}, not Completed")
+        raise aws.AwsError(f"o training job {job_name} terminou como {status}, não Completed")
 
     artifact_uri = description["ModelArtifacts"]["S3ModelArtifacts"]
     bucket, key = aws.split_s3_uri(artifact_uri)
@@ -177,9 +176,9 @@ def cmd_wait_training(args: argparse.Namespace) -> int:
         json.dump(handoff, handle, indent=2)
 
     billable = description.get("BillableTimeInSeconds")
-    log(f"[wait] {job_name}: Completed in {billable}s billable")
-    log(f"[wait] artifact proven via HeadObject: s3://{bucket}/{key} ({head['content_length']} bytes)")
-    log(f"[wait] handoff written to {handoff_path}")
+    log(f"[wait] {job_name}: Completed em {billable}s cobrados")
+    log(f"[wait] artefato comprovado via HeadObject: s3://{bucket}/{key} ({head['content_length']} bytes)")
+    log(f"[wait] passagem de bastão escrita em {handoff_path}")
 
     emit(
         {
@@ -239,7 +238,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             "max_capacity": targets[0]["MaxCapacity"] if targets else None,
             "policy_names": [p["PolicyName"] for p in policies],
         }
-        log(f"[status] {mode:<10} scaling: min={result['scaling'][mode]['min_capacity']} max={result['scaling'][mode]['max_capacity']} policies={len(policies)}")
+        log(f"[status] {mode:<10} escala: min={result['scaling'][mode]['min_capacity']} max={result['scaling'][mode]['max_capacity']} policies={len(policies)}")
 
     emit(result)
     return 0
@@ -284,7 +283,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
         for a, b in zip(result["realtime"]["sample_predictions"], result["serverless"]["sample_predictions"], strict=True)
     )
     result["predictions_match"] = predictions_match
-    log(f"[compare] predictions_match={predictions_match} (tolerance {tolerance})")
+    log(f"[compare] predictions_match={predictions_match} (tolerância {tolerance})")
 
     _write_result("compare.json", result)
     emit(result)
@@ -313,7 +312,7 @@ def cmd_async(args: argparse.Namespace) -> int:
     timestamp = int(time.time())
     input_key = f"async/input/{timestamp}.csv"
     input_uri = aws.upload_file(session, str(local_path), bucket, input_key)
-    log(f"[async] uploaded payload ({len(input_rows)} rows) to {input_uri}")
+    log(f"[async] payload de {len(input_rows)} linhas enviado para {input_uri}")
 
     invocation = aws.invoke_endpoint_async(session, endpoint_name, input_uri)
     log(f"[async] InferenceId={invocation['inference_id']} output={invocation['output_location']}")
@@ -368,7 +367,7 @@ def cmd_batch(args: argparse.Namespace) -> int:
 
     batch_cfg = cfg.batch
     job_name = f"{PROJECT_PREFIX}-batch-{timestamp}"
-    log(f"[batch] creating transform job {job_name}")
+    log(f"[batch] criando o transform job {job_name}")
     aws.create_transform_job(
         session,
         job_name=job_name,
@@ -384,14 +383,14 @@ def cmd_batch(args: argparse.Namespace) -> int:
     description = aws.wait_transform_job(session, job_name, timeout_seconds=900)
     status = description["TransformJobStatus"]
     if status != "Completed":
-        raise aws.AwsError(f"transform job {job_name} ended as {status}")
+        raise aws.AwsError(f"o transform job {job_name} terminou como {status}")
 
-    # Discover the output object instead of assembling "<inputfile>.out" by
-    # hand: same principle the training artifact handoff already follows.
+    # Descobrir o objeto de saída em vez de montar "<arquivo>.out" à mão: o mesmo
+    # princípio que a passagem de bastão do artefato de treino já segue.
     output_keys = aws.list_objects(session, bucket, output_prefix)
     if len(output_keys) != 1:
         raise aws.AwsError(
-            f"expected exactly 1 output object under s3://{bucket}/{output_prefix}, found {output_keys}"
+            f"esperava exatamente 1 objeto de saída em s3://{bucket}/{output_prefix}, encontrei {output_keys}"
         )
     output_key = output_keys[0]
     output_text = aws.download_text(session, bucket, output_key)
@@ -410,7 +409,7 @@ def cmd_batch(args: argparse.Namespace) -> int:
         "output_count": len(output_probs),
         "duration_seconds_observed": duration_s,
     }
-    log(f"[batch] output_count={result['output_count']} duration_observed={duration_s}s")
+    log(f"[batch] output_count={result['output_count']} duração_observada={duration_s}s")
 
     _write_result("batch.json", result)
     emit(result)
@@ -468,22 +467,22 @@ def cmd_scale_demo(args: argparse.Namespace) -> int:
     target = cfg.scale_demo_target_min_capacity
 
     before = aws.describe_endpoint(session, endpoint_name)["ProductionVariants"][0]["CurrentInstanceCount"]
-    log(f"[scale] before: {before}")
+    log(f"[scale] antes: {before}")
 
-    log(f"[scale] raising MinCapacity/MaxCapacity to {target} to force a deterministic scale-out")
+    log(f"[scale] subindo MinCapacity/MaxCapacity para {target} para forçar um scale-out determinístico")
     aws.register_scalable_target_min_capacity(session, resource_id, min_capacity=target, max_capacity=target)
     scaled = aws.wait_instance_count(session, endpoint_name, target_count=target, timeout_seconds=timeout)
     aws.wait_endpoint_in_service(session, endpoint_name, timeout_seconds=timeout)
-    log(f"[scale] scaled: {scaled}")
+    log(f"[scale] escalado: {scaled}")
 
-    log("[scale] restoring MinCapacity=1, MaxCapacity=2 (Terraform-managed values, no drift left behind)")
+    log("[scale] restaurando MinCapacity=1, MaxCapacity=2 (valores gerenciados pelo Terraform, sem deixar drift)")
     aws.register_scalable_target_min_capacity(session, resource_id, min_capacity=1, max_capacity=2)
-    log("[scale] forcing DesiredInstanceCount back to 1: lowering MaxCapacity alone does not make "
-        "Application Auto Scaling scale in, that only happens once the target-tracking alarm evaluates")
+    log("[scale] forçando DesiredInstanceCount de volta para 1: baixar só o MaxCapacity não faz o "
+        "Application Auto Scaling reduzir, isso só acontece quando o alarme de target tracking avalia")
     aws.set_endpoint_desired_capacity(session, endpoint_name, desired_instance_count=1)
     restored = aws.wait_instance_count(session, endpoint_name, target_count=1, timeout_seconds=timeout)
     aws.wait_endpoint_in_service(session, endpoint_name, timeout_seconds=timeout)
-    log(f"[scale] restored: {restored}")
+    log(f"[scale] restaurado: {restored}")
 
     result = {"endpoint_name": endpoint_name, "before": before, "scaled": scaled, "restored": restored}
     _write_result("scale.json", result)
@@ -513,7 +512,7 @@ def cmd_evidence(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# verify-clean (works from AWS APIs by name prefix, never from Terraform state)
+# verify-clean (trabalha pelas APIs da AWS por prefixo de nome, nunca pelo state)
 # --------------------------------------------------------------------------- #
 
 
@@ -576,7 +575,7 @@ def cmd_verify_clean(args: argparse.Namespace) -> int:
     for name, passed in checks.items():
         log(f"  [{'PASS' if passed else 'FAIL'}] {name}")
     passed = all(checks.values())
-    log(f"[{'PASS' if passed else 'FAIL'}] verify-clean")
+    log(f"[{'PASS' if passed else 'FAIL'}] verificação de limpeza")
 
     emit({"passed": passed, "checks": checks, "details": details})
     return 0 if passed else 1

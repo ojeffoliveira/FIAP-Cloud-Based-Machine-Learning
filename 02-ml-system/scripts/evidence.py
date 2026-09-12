@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Assemble the evidence package.
+"""Monta o pacote de evidências.
 
-The central claim of the first class is that "correct" is a chain of evidence,
-not a single metric. This script materialises that chain into one file: which
-data (by hash), which image, which hyperparameters, which job, which artifact
-(by size and ETag), which endpoint, which smoke result, which test metrics - and
-which tool versions produced all of it.
+A tese central da primeira aula é que "correto" é uma cadeia de evidências, não
+uma métrica isolada. Este script materializa essa cadeia num arquivo: qual dado
+(por hash), qual imagem, quais hiperparâmetros, qual job, qual artefato (por
+tamanho e ETag), qual endpoint, qual resultado de smoke, quais métricas de teste
+- e quais versões de ferramenta produziram tudo isso.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def tool_versions(terraform_dir: Path) -> dict[str, object]:
     for module in ("boto3", "botocore", "numpy", "sklearn"):
         try:
             versions[module] = __import__(module).__version__
-        except Exception:  # a missing optional tool must not break the report
+        except Exception:  # ferramenta opcional ausente não pode quebrar o relatório
             versions[module] = None
     return versions
 
@@ -82,11 +82,11 @@ def load_json(path: Path) -> dict | None:
 
 
 def channel_evidence(session, outputs: dict, data_dir: Path) -> dict[str, object]:
-    """HeadObject each training channel and compare its size with the local file.
+    """Faz HeadObject em cada canal de treino e compara o tamanho com o arquivo local.
 
-    "The apply succeeded" says nothing about what SageMaker will read. This is the
-    storage boundary proven at the object level: the bytes are there, and they are
-    the same count of bytes the generator wrote.
+    "O apply passou" não diz nada sobre o que o SageMaker vai ler. Esta é a
+    fronteira de storage provada no nível do objeto: os bytes estão lá, e são a
+    mesma quantidade de bytes que o gerador escreveu.
     """
     local = {"train": MODEL_TRAIN_FILE, "validation": MODEL_VALIDATION_FILE}
     channels = outputs.get("training_channels")
@@ -126,40 +126,40 @@ def to_markdown(evidence: dict) -> str:
         return f"| {label} | {'-' if value in (None, '', {}) else value} |"
 
     lines = [
-        "# Lab 1 - evidence package",
+        "# Lab 02 - pacote de evidências",
         "",
-        f"Generated at {evidence['generated_at_utc']} UTC.",
+        f"Gerado em {evidence['generated_at_utc']} UTC.",
         "",
-        "A model is not an ML system. Below is the chain that turns one into the",
-        "other, each link recorded with something checkable.",
+        "Um modelo não é um sistema de ML. Abaixo está a cadeia que transforma um",
+        "no outro, cada elo registrado com algo conferível.",
         "",
-        "## 1. Environment",
+        "## 1. Ambiente",
         "",
-        "| Item | Value |",
+        "| Item | Valor |",
         "|---|---|",
-        row("AWS account", evidence["aws"]["account_id"]),
-        row("Region", evidence["aws"]["region"]),
-        row("Caller", evidence["aws"]["caller_arn"]),
-        row("Execution role", evidence["aws"]["execution_role_arn"]),
-        row("Git commit", evidence["git"]["commit_sha"]),
-        row("Working tree clean", evidence["git"]["working_tree_clean"]),
+        row("Conta AWS", evidence["aws"]["account_id"]),
+        row("Região", evidence["aws"]["region"]),
+        row("Chamador", evidence["aws"]["caller_arn"]),
+        row("Role de execução", evidence["aws"]["execution_role_arn"]),
+        row("Commit do Git", evidence["git"]["commit_sha"]),
+        row("Árvore de trabalho limpa", evidence["git"]["working_tree_clean"]),
         row("Terraform", (evidence["versions"].get("terraform") or {}).get("terraform")),
-        row("AWS provider", (evidence["versions"].get("terraform") or {}).get("providers")),
+        row("Provider AWS", (evidence["versions"].get("terraform") or {}).get("providers")),
         row("Python", evidence["versions"]["python"]),
         row("boto3 / botocore", f"{evidence['versions']['boto3']} / {evidence['versions']['botocore']}"),
         row("numpy / scikit-learn", f"{evidence['versions']['numpy']} / {evidence['versions']['sklearn']}"),
         "",
-        "## 2. Data (storage capability)",
+        "## 2. Dados (capacidade de storage)",
         "",
-        "| Item | Value |",
+        "| Item | Valor |",
         "|---|---|",
         row("Bucket", evidence["aws"]["bucket_name"]),
-        row("Seed", dataset.get("seed")),
-        row("Schema version", dataset.get("schema_version")),
-        row("Rows", dataset.get("rows")),
-        row("Source prevalence", (dataset.get("source") or {}).get("prevalence")),
+        row("Semente", dataset.get("seed")),
+        row("Versão do schema", dataset.get("schema_version")),
+        row("Linhas", dataset.get("rows")),
+        row("Prevalência no source", (dataset.get("source") or {}).get("prevalence")),
         "",
-        "| File | Rows | SHA-256 |",
+        "| Arquivo | Linhas | SHA-256 |",
         "|---|---|---|",
         f"| {(dataset.get('source') or {}).get('file')} | "
         f"{(dataset.get('source') or {}).get('rows')} | "
@@ -172,9 +172,9 @@ def to_markdown(evidence: dict) -> str:
     if channels_proven:
         lines += [
             "",
-            "Training channels as they exist in S3 (HeadObject, not inference):",
+            "Canais de treino como existem no S3 (HeadObject, não inferência):",
             "",
-            "| Channel | Object | Bytes in S3 | Matches local file |",
+            "| Canal | Objeto | Bytes no S3 | Bate com o arquivo local |",
             "|---|---|---|---|",
         ]
         for name, channel in sorted(channels_proven.items()):
@@ -185,63 +185,63 @@ def to_markdown(evidence: dict) -> str:
 
     lines += [
         "",
-        "## 3. Training (training capability)",
+        "## 3. Treino (capacidade de treino)",
         "",
-        "| Item | Value |",
+        "| Item | Valor |",
         "|---|---|",
         row("Training job", training.get("training_job_name")),
         row("Status", training.get("status")),
-        row("Start", training.get("training_start_time")),
-        row("End", training.get("training_end_time")),
-        row("Billable seconds", training.get("billable_seconds")),
-        row("Image", training.get("training_image")),
-        row("Input mode", training.get("training_input_mode")),
-        row("Instance", f"{training.get('instance_count')} x {training.get('instance_type')}"),
+        row("Início", training.get("training_start_time")),
+        row("Fim", training.get("training_end_time")),
+        row("Segundos cobrados", training.get("billable_seconds")),
+        row("Imagem", training.get("training_image")),
+        row("Modo de entrada", training.get("training_input_mode")),
+        row("Instância", f"{training.get('instance_count')} x {training.get('instance_type')}"),
         row("Volume (GB)", training.get("volume_size_in_gb")),
-        row("Max runtime (s)", training.get("max_runtime_in_seconds")),
-        row("Output path", training.get("output_s3_path")),
+        row("Tempo máximo (s)", training.get("max_runtime_in_seconds")),
+        row("Caminho de saída", training.get("output_s3_path")),
         "",
-        "Hyperparameters as accepted by SageMaker:",
+        "Hiperparâmetros como o SageMaker os aceitou:",
         "",
-        "| Name | Value |",
+        "| Nome | Valor |",
         "|---|---|",
     ]
     for key, value in sorted((training.get("hyperparameters") or {}).items()):
         lines.append(f"| {key} | {value} |")
 
-    lines += ["", "Input channels:", "", "| Channel | S3 URI | Content type |", "|---|---|---|"]
+    lines += ["", "Canais de entrada:", "", "| Canal | URI no S3 | Content type |", "|---|---|---|"]
     for channel in training.get("input_channels") or []:
         lines.append(f"| {channel['channel']} | `{channel['s3_uri']}` | {channel['content_type']} |")
 
     if training.get("final_metrics"):
-        lines += ["", "Metrics reported by the training container:", "", "| Metric | Value |", "|---|---|"]
+        lines += ["", "Métricas reportadas pelo container de treino:", "", "| Métrica | Valor |", "|---|---|"]
         for metric in training["final_metrics"]:
             lines.append(f"| {metric['name']} | {metric['value']} |")
 
     lines += [
         "",
-        "## 4. Model artifact",
+        "## 4. Artefato do modelo",
         "",
-        "| Item | Value |",
+        "| Item | Valor |",
         "|---|---|",
-        row("Artifact URI", f"`{training.get('model_artifact_uri')}`" if training.get("model_artifact_uri") else None),
-        row("Size (bytes)", training.get("model_artifact_bytes")),
+        row("URI do artefato", f"`{training.get('model_artifact_uri')}`" if training.get("model_artifact_uri") else None),
+        row("Tamanho (bytes)", training.get("model_artifact_bytes")),
         row("ETag", training.get("model_artifact_etag")),
-        row("Existence proven by", "s3:HeadObject before the Model was created"),
+        row("Existência provada por", "s3:HeadObject antes de o Model ser criado"),
         "",
-        "## 5. Serving (prediction capability)",
+        "## 5. Serving (capacidade de predição)",
         "",
-        "| Item | Value |",
+        "| Item | Valor |",
         "|---|---|",
-        row("SageMaker model", evidence["terraform_outputs"].get("model_name")),
+        row("Model do SageMaker", evidence["terraform_outputs"].get("model_name")),
         row("Endpoint config", evidence["terraform_outputs"].get("endpoint_config_name")),
         row("Endpoint", evidence["terraform_outputs"].get("endpoint_name")),
-        row("Endpoint status", endpoint.get("status")),
-        row("Instance", f"{endpoint.get('instance_count')} x {endpoint.get('instance_type')}"),
+        row("Status do endpoint", endpoint.get("status")),
+        row("Instância", f"{endpoint.get('instance_count')} x {endpoint.get('instance_type')}"),
         "",
-        "Deterministic smoke request:",
+        "Requisição de smoke determinística:",
         "",
-        "| Record | CSV payload | p(churn) |",
+        "| Registro | Payload CSV | p(churn) |",
         "|---|---|---|",
     ]
     probabilities = smoke.get("probabilities") or {}
@@ -250,49 +250,49 @@ def to_markdown(evidence: dict) -> str:
     if smoke:
         lines += [
             "",
-            f"Smoke checks: **{'PASS' if smoke.get('passed') else 'FAIL'}** "
+            f"Verificações de smoke: **{'PASS' if smoke.get('passed') else 'FAIL'}** "
             f"({sum(1 for v in (smoke.get('checks') or {}).values() if v)}"
             f"/{len(smoke.get('checks') or {})}).",
         ]
 
     lines += [
         "",
-        "## 6. Evaluation (evidence capability)",
+        "## 6. Avaliação (capacidade de evidência)",
         "",
-        "| Item | Value |",
+        "| Item | Valor |",
         "|---|---|",
-        row("Samples", metrics.get("samples")),
-        row("Prevalence", metrics.get("prevalence")),
-        row("Decision threshold", metrics.get("decision_threshold")),
-        row("Majority baseline accuracy", metrics.get("majority_baseline_accuracy")),
-        row("Accuracy", metrics.get("accuracy")),
-        row("Precision", metrics.get("precision")),
+        row("Amostras", metrics.get("samples")),
+        row("Prevalência", metrics.get("prevalence")),
+        row("Limiar de decisão", metrics.get("decision_threshold")),
+        row("Acurácia da baseline majoritária", metrics.get("majority_baseline_accuracy")),
+        row("Acurácia", metrics.get("accuracy")),
+        row("Precisão", metrics.get("precision")),
         row("Recall", metrics.get("recall")),
         row("F1", metrics.get("f1")),
         row("ROC-AUC", metrics.get("roc_auc")),
         row("PR-AUC", metrics.get("pr_auc")),
-        row("Beats baseline", metrics.get("beats_majority_baseline")),
+        row("Supera a baseline", metrics.get("beats_majority_baseline")),
         "",
     ]
     if metrics.get("confusion_matrix"):
         cm = metrics["confusion_matrix"]
         lines += [
-            "| | Predicted 0 | Predicted 1 |",
+            "| | Previsto 0 | Previsto 1 |",
             "|---|---|---|",
-            f"| **Actual 0** | {cm['true_negative']} | {cm['false_positive']} |",
-            f"| **Actual 1** | {cm['false_negative']} | {cm['true_positive']} |",
+            f"| **Real 0** | {cm['true_negative']} | {cm['false_positive']} |",
+            f"| **Real 1** | {cm['false_negative']} | {cm['true_positive']} |",
             "",
         ]
 
     lines += [
-        "## 7. Verdict",
+        "## 7. Veredito",
         "",
-        "| Stage | Result |",
+        "| Elo | Resultado |",
         "|---|---|",
     ]
     for stage, passed in evidence["chain"].items():
-        lines.append(f"| {stage} | {'PASS' if passed else 'MISSING/FAIL'} |")
-    lines += ["", f"**Chain complete: {'yes' if evidence['passed'] else 'no'}**", ""]
+        lines.append(f"| {stage} | {'PASS' if passed else 'AUSENTE/FAIL'} |")
+    lines += ["", f"**Cadeia completa: {'sim' if evidence['passed'] else 'não'}**", ""]
     return "\n".join(lines)
 
 
@@ -335,9 +335,9 @@ def main() -> int:
                 "instance_count": variant.get("CurrentInstanceCount"),
             }
     except aws.AwsError as exc:
-        # Evidence is still worth producing without live AWS access - it just
-        # records that the serving links are missing.
-        log(f"[warn] AWS/Terraform context unavailable: {exc}")
+        # A evidência ainda vale a pena sem acesso vivo à AWS - ela só registra
+        # que os elos de serving estão faltando.
+        log(f"[aviso] contexto de AWS/Terraform indisponível: {exc}")
 
     dataset = load_json(args.data / MANIFEST_FILE) or {}
     training = load_json(out / "training_job.json")
@@ -346,14 +346,14 @@ def main() -> int:
 
     channels = aws_block.get("input_channels") or {}
     chain = {
-        "storage: dataset generated and fingerprinted": bool(dataset),
-        "storage: training channels proven in S3": bool(channels)
+        "storage: dataset gerado e com hash registrado": bool(dataset),
+        "storage: canais de treino comprovados no S3": bool(channels)
         and all(bool(c.get("size_matches_local")) for c in channels.values()),
-        "training: job reached Completed": (training or {}).get("status") == "Completed",
-        "artifact: model.tar.gz proven in S3": bool((training or {}).get("model_artifact_bytes")),
+        "training: job chegou a Completed": (training or {}).get("status") == "Completed",
+        "artifact: model.tar.gz comprovado no S3": bool((training or {}).get("model_artifact_bytes")),
         "serving: endpoint InService": endpoint_block.get("status") == "InService",
-        "serving: deterministic smoke inference passed": bool((smoke or {}).get("passed")),
-        "evidence: test-set metrics meet acceptance": bool((evaluation or {}).get("passed")),
+        "serving: inferência de smoke determinística aprovada": bool((smoke or {}).get("passed")),
+        "evidence: métricas de teste atendem a aceitação": bool((evaluation or {}).get("passed")),
     }
 
     evidence = {
@@ -380,7 +380,7 @@ def main() -> int:
 
     for stage, passed in chain.items():
         log(f"  [{'PASS' if passed else 'FAIL'}] {stage}")
-    log(f"[{'PASS' if evidence['passed'] else 'FAIL'}] evidence chain -> {out / 'evidence.md'}")
+    log(f"[{'PASS' if evidence['passed'] else 'FAIL'}] cadeia de evidências -> {out / 'evidence.md'}")
 
     emit({"evidence_json": str(out / "evidence.json"), "chain": chain, "passed": evidence["passed"]})
     return 0 if evidence["passed"] else 1

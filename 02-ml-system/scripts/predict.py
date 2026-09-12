@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Deterministic smoke inference against the deployed endpoint.
+"""Inferência determinística de verificação (smoke) contra o endpoint publicado.
 
-The payload is fixed on purpose: two records the data-generating process makes
-far apart in risk. A healthy system must score the high-risk record above the
-low-risk one, which catches a silently mis-ordered feature vector - the kind of
-bug that leaves accuracy looking fine while every prediction is wrong.
+O payload é fixo de propósito: dois registros que o processo gerador dos dados
+coloca em extremos opostos de risco. Um sistema saudável precisa pontuar o
+registro de alto risco acima do de baixo risco, o que pega um vetor de features
+silenciosamente fora de ordem - o tipo de bug que deixa a acurácia com boa
+aparência enquanto toda predição está errada.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from lab1.data_contract import SMOKE_RECORDS, smoke_payload
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", default=os.environ.get("AWS_PROFILE"))
-    parser.add_argument("--endpoint", help="defaults to the endpoint_name Terraform output")
+    parser.add_argument("--endpoint", help="por padrão, o output endpoint_name do Terraform")
     args = parser.parse_args()
 
     cfg = load_config()
@@ -36,13 +37,13 @@ def main() -> int:
 
         status = aws.describe_endpoint(session, endpoint)["EndpointStatus"]
         if status != "InService":
-            raise aws.AwsError(f"endpoint {endpoint} is {status}, not InService")
+            raise aws.AwsError(f"o endpoint {endpoint} está {status}, não InService")
 
         names, body = smoke_payload(cfg)
         log(f"[predict] endpoint {endpoint} ({status})")
-        log(f"[predict] feature order: {', '.join(cfg.feature_order)}")
+        log(f"[predict] ordem das features: {', '.join(cfg.feature_order)}")
         for name, line in zip(names, body.split("\n")):
-            log(f"[predict] request {name}: {line}")
+            log(f"[predict] requisição {name}: {line}")
 
         probabilities = aws.invoke_endpoint_csv(session, endpoint, body)
     except aws.AwsError as exc:
@@ -52,14 +53,15 @@ def main() -> int:
 
     checks: dict[str, bool] = {}
     for name, probability in zip(names, probabilities):
-        log(f"[predict] response {name}: p(churn)={probability:.6f}")
+        log(f"[predict] resposta {name}: p(churn)={probability:.6f}")
     checks["all_finite"] = all(math.isfinite(p) for p in probabilities)
     checks["all_in_unit_interval"] = all(0.0 <= p <= 1.0 for p in probabilities)
     checks["one_probability_per_row"] = len(probabilities) == len(SMOKE_RECORDS)
 
     by_name = dict(zip(names, probabilities))
-    # Directional sanity, not a calibration claim: the generator makes high_risk
-    # strictly riskier, so a model that inverts them has a wiring bug.
+    # Sanidade de direção, não afirmação sobre calibração: o gerador faz o
+    # high_risk estritamente mais arriscado, então um modelo que inverte os dois
+    # está ligado errado.
     checks["high_risk_scored_above_low_risk"] = by_name["high_risk"] > by_name["low_risk"]
 
     result = {
@@ -83,7 +85,7 @@ def main() -> int:
 
     for name, passed in checks.items():
         log(f"  [{'PASS' if passed else 'FAIL'}] {name}")
-    log(f"[{'PASS' if result['passed'] else 'FAIL'}] smoke inference")
+    log(f"[{'PASS' if result['passed'] else 'FAIL'}] inferência de smoke")
 
     emit(result)
     return 0 if result["passed"] else 1

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Prove the lab left nothing billable behind.
+"""Prova que o lab não deixou nada cobrando.
 
-Terraform state is gone after `make destroy`, so this script does not trust it:
-it sweeps SageMaker and S3 by the project prefix and asserts that no endpoint,
-endpoint configuration, model or lab bucket survives.
+O state do Terraform desaparece depois do `make destroy`, então este script não
+confia nele: varre SageMaker e S3 pelo prefixo do projeto e afirma que nenhum
+endpoint, endpoint configuration, model ou bucket do lab sobreviveu.
 
-A completed training job stays in SageMaker history forever. That is a record,
-not a running resource, so it is reported and explicitly not counted as a
-cleanup failure.
+Um training job concluído fica no histórico do SageMaker para sempre. Isso é
+registro, não recurso em execução, então ele é reportado e explicitamente não
+contado como falha de limpeza.
 """
 
 from __future__ import annotations
@@ -34,9 +34,9 @@ def bucket_exists(session, bucket: str) -> bool:
         if code in {"404", "NoSuchBucket", "NotFound"}:
             return False
         if code == "403":
-            # Someone else owns a bucket with this name; it is not ours and not
-            # billable to this account, but say so rather than claiming success.
-            log(f"[warn] head_bucket on {bucket} returned 403 - name exists outside this account")
+            # Outra pessoa é dona de um bucket com esse nome; não é nosso e não
+            # cobra desta conta, mas dizer isso é melhor que declarar sucesso.
+            log(f"[aviso] head_bucket em {bucket} devolveu 403 - o nome existe fora desta conta")
             return False
         raise
     return True
@@ -73,19 +73,19 @@ def main() -> int:
     checks = {
         "no_endpoint": {
             "passed": not endpoints,
-            "detail": [e["EndpointName"] for e in endpoints] or f"no endpoint matching {prefix!r}",
+            "detail": [e["EndpointName"] for e in endpoints] or f"nenhum endpoint com {prefix!r}",
         },
         "no_endpoint_configuration": {
             "passed": not configs,
-            "detail": [c["EndpointConfigName"] for c in configs] or f"no endpoint config matching {prefix!r}",
+            "detail": [c["EndpointConfigName"] for c in configs] or f"nenhuma endpoint config com {prefix!r}",
         },
         "no_sagemaker_model": {
             "passed": not models,
-            "detail": [m["ModelName"] for m in models] or f"no model matching {prefix!r}",
+            "detail": [m["ModelName"] for m in models] or f"nenhum model com {prefix!r}",
         },
         "no_lab_bucket": {
             "passed": not bucket_present,
-            "detail": f"{bucket} still exists" if bucket_present else f"{bucket} is gone",
+            "detail": f"{bucket} ainda existe" if bucket_present else f"{bucket} não existe mais",
         },
     }
 
@@ -111,10 +111,10 @@ def main() -> int:
         log(f"  [{'PASS' if check['passed'] else 'FAIL'}] {name}: {check['detail']}")
     if result["training_jobs_in_history"]:
         log(
-            f"[info] {len(result['training_jobs_in_history'])} training job(s) remain in SageMaker "
-            "history - a record, not a running resource, and not billable"
+            f"[info] {len(result['training_jobs_in_history'])} training job(s) permanecem no histórico "
+            "do SageMaker - registro, não recurso em execução, e não cobra"
         )
-    log(f"[{'PASS' if result['passed'] else 'FAIL'}] no billable serving resources remain")
+    log(f"[{'PASS' if result['passed'] else 'FAIL'}] não sobrou recurso de serving cobrando")
 
     emit(result)
     return 0 if result["passed"] else 1

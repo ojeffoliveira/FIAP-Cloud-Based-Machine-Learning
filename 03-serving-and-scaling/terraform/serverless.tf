@@ -1,6 +1,6 @@
-# Serverless Inference: same artifact and image, no persistent instance. AWS
-# manages capacity; the lab measures (not promises) first-request/cold
-# behaviour in `make compare`.
+# Serverless Inference: mesmo artefato e mesma imagem, sem instância persistente.
+# A AWS gerencia a capacidade; o lab mede (não promete) o comportamento da
+# primeira chamada / partida a frio no `make compare`.
 resource "aws_sagemaker_endpoint_configuration" "serverless" {
   count = var.deploy_serving ? 1 : 0
 

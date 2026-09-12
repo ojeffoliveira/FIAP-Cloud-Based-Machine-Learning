@@ -181,7 +181,7 @@ Os passos 6 e 7 dessa sequência são o coração do lab: entre "o treino termin
 
 ### Resultado esperado desta parte
 
-`make doctor` respondendo `[PASS] preflight` dentro do Codespaces da disciplina, com Terraform 1.15.8, Python 3.12, a conta do Learner Lab identificada, a região `us-east-1` confirmada e a `LabRole` encontrada.
+`make doctor` respondendo `[PASS] verificação prévia` dentro do Codespaces da disciplina, com Terraform 1.15.8, Python 3.12, a conta do Learner Lab identificada, a região `us-east-1` confirmada e a `LabRole` encontrada.
 
 > Vamos gastar 15 minutos garantindo que o ambiente está certo antes de tocar na AWS. Todo erro deste laboratório é mais barato de descobrir aqui do que depois de criar um endpoint.
 
@@ -306,25 +306,25 @@ make help
 
 > Saída esperada:
 > ```text
-> Lab 1 - From Model to Machine Learning System
+> Lab 02 - Do modelo ao sistema de Machine Learning
 >
->   help           Show available targets
->   doctor         Check tool versions and AWS credentials/region/role
->   data           Generate the deterministic dataset
->   fmt            Format Terraform (check in CI, rewrite locally)
+>   help           Lista os alvos disponíveis
+>   doctor         Confere versões das ferramentas e credenciais/região/role da AWS
+>   data           Gera o dataset determinístico
+>   fmt            Formata o Terraform (confere no CI, reescreve localmente)
 >   validate       terraform init + validate
->   plan           Plan the current stage
->   apply          Provision storage + training, then serving (single command, two stages)
->   predict        Deterministic smoke inference
->   evaluate       Score the held-out test set through the endpoint
->   evidence       Build the evidence package
->   destroy        Destroy every managed resource
->   verify-clean   Prove no billable serving resource remains
->   e2e            Full lifecycle with failure-safe cleanup (KEEP_RESOURCES=1 to skip destroy)
->   clean          Remove generated local artifacts (never touches AWS)
+>   plan           Planeja o estágio atual
+>   apply          Provisiona storage + treino e depois o serving (um comando, dois estágios)
+>   predict        Inferência determinística de verificação (smoke)
+>   evaluate       Pontua o conjunto de teste separado através do endpoint
+>   evidence       Monta o pacote de evidências
+>   destroy        Destrói todos os recursos gerenciados
+>   verify-clean   Prova que não sobrou recurso de serving cobrando
+>   e2e            Ciclo completo com limpeza à prova de falha (KEEP_RESOURCES=1 pula o destroy)
+>   clean          Remove artefatos locais gerados (nunca toca na AWS)
 >
->   Full lifecycle:  make e2e
->   Keep resources:  make e2e KEEP_RESOURCES=1   (you must run make destroy later)
+>   Ciclo completo:  make e2e
+>   Manter recursos: make e2e KEEP_RESOURCES=1   (você precisa rodar make destroy depois)
 > ```
 
 São 14 comandos, e é a lista inteira do laboratório. Nada acontece por baixo do pano: cada um deles é uma chamada de `terraform` ou de `python scripts/...` que você pode abrir e ler no `Makefile`.
@@ -367,20 +367,20 @@ make doctor
 
 > Saída esperada (o número da conta é o da sua conta, e o `caller` traz o seu usuário do Academy):
 > ```text
-> == tool versions ==
+> == versões das ferramentas ==
 > Terraform v1.15.8
 > on linux_amd64
 > Python 3.12.11
 > boto3 1.43.73 botocore 1.43.73 numpy 2.5.2 scikit-learn 1.9.0
-> == aws preflight ==
-> AWS preflight
->   account          : 123456789012
->   caller           : arn:aws:sts::1234****9012:assumed-role/voclabs/user1234567=
->   region           : us-east-1 (required us-east-1)
->   execution role   : arn:aws:iam::1234****9012:role/LabRole
->   lab bucket to use: prb-cloud-ml-lab1-123456789012
->   credentials are never printed by this lab
-> [PASS] preflight
+> == verificação prévia da AWS ==
+> Verificação prévia da AWS
+>   conta            : 123456789012
+>   chamador         : arn:aws:sts::1234****9012:assumed-role/voclabs/user1234567=
+>   região           : us-east-1 (exigida us-east-1)
+>   role de execução : arn:aws:iam::1234****9012:role/LabRole
+>   bucket do lab    : prb-cloud-ml-lab1-123456789012
+>   este lab nunca imprime credencial
+> [PASS] verificação prévia
 > ```
 
 ![](img/04-make-doctor.png)
@@ -436,7 +436,7 @@ aws sts get-caller-identity --query Account --output text
 
 - [x] `terraform version` responde `v1.15.8`.
 - [x] `aws sts get-caller-identity` responde sem erro.
-- [x] `make doctor` termina com `[PASS] preflight`.
+- [x] `make doctor` termina com `[PASS] verificação prévia`.
 
 Se os três estão de pé, você já não corre mais risco de errar por ambiente. Nenhum recurso foi criado na AWS até aqui, e nada foi cobrado.
 
@@ -461,13 +461,13 @@ make data
 
 > Saída esperada, literalmente igual à sua (com exceção do caminho, que traz o nome do seu fork):
 > ```text
-> [data] seed=20260817 rows=4000 out=/workspaces/FIAP-Cloud-Based-Machine-Learning/02-ml-system/artifacts/data
-> [data] seed 20260817 schema 1.0.0
-> [data] source 4000 rows, prevalence 0.3375
-> [data] train       2800 rows  prevalence 0.3375  2013b9725797
-> [data] validation   600 rows  prevalence 0.338333  18a0ddc5d4d8
-> [data] test         600 rows  prevalence 0.336667  04c4fdee573f
-> [data] written to /workspaces/FIAP-Cloud-Based-Machine-Learning/02-ml-system/artifacts/data
+> [data] semente=20260817 linhas=4000 destino=/workspaces/FIAP-Cloud-Based-Machine-Learning/02-ml-system/artifacts/data
+> [data] semente 20260817 schema 1.0.0
+> [data] source 4000 linhas, prevalência 0.3375
+> [data] train       2800 linhas  prevalência 0.3375  2013b9725797
+> [data] validation   600 linhas  prevalência 0.338333  18a0ddc5d4d8
+> [data] test         600 linhas  prevalência 0.336667  04c4fdee573f
+> [data] escrito em /workspaces/FIAP-Cloud-Based-Machine-Learning/02-ml-system/artifacts/data
 > ```
 
 ![](img/05-make-data.png)
@@ -590,14 +590,14 @@ PYTHONPATH=src .venv/bin/python scripts/validate_data.py > artifacts/contrato.js
 
 > Saída esperada em tela (é longa; estas são a primeira e as últimas linhas):
 > ```text
-> data contract: 48 checks against /workspaces/FIAP-Cloud-Based-Machine-Learning/02-ml-system/artifacts/data
->   [PASS] files.present: all 6 files present in ...
+> contrato de dados: 48 verificações contra /workspaces/FIAP-Cloud-Based-Machine-Learning/02-ml-system/artifacts/data
+>   [PASS] files.present: todos os 6 arquivos presentes em ...
 >   [PASS] schema.serving_contract: serving: {'content_type': 'text/csv', 'header': False, 'label_present': False, 'column_count': 7}
 >   [PASS] schema.training_contract: training: {'content_type': 'text/csv', 'header': False, 'label_present': True, 'label_position': 'first', 'column_count': 8}
 >   ...
->   [PASS] payload.roundtrip_matches_file: 600 rows re-serialise byte-identically
->   [PASS] payload.smoke_shape: smoke records ['high_risk', 'low_risk'] -> 2 lines of 7 columns
-> [PASS] 0 of 48 checks failed
+>   [PASS] payload.roundtrip_matches_file: 600 linhas re-serializam byte a byte
+>   [PASS] payload.smoke_shape: registros de smoke ['high_risk', 'low_risk'] -> 2 linhas de 7 colunas
+> [PASS] 0 de 48 verificações reprovaram
 > ```
 
 ![](img/08-contrato-48-checks.png)
@@ -620,10 +620,10 @@ PYTHONPATH=src .venv/bin/python scripts/validate_data.py > /dev/null
 
 > Saída esperada (três reprovações, e o comando termina com código de erro):
 > ```text
->   [FAIL] source.row_count: 4001 rows, expected 4000
->   [FAIL] manifest.fingerprints_match_files: mismatched: ['source']
->   [FAIL] splits.partition_source: {'train': 2800, 'validation': 600, 'test': 600} sums to 4000 of 4001 source rows
-> [FAIL] 3 of 48 checks failed
+>   [FAIL] source.row_count: 4001 linhas, esperado 4000
+>   [FAIL] manifest.fingerprints_match_files: divergentes: ['source']
+>   [FAIL] splits.partition_source: {'train': 2800, 'validation': 600, 'test': 600} soma 4000 de 4001 linhas do source
+> [FAIL] 3 de 48 verificações reprovaram
 > ```
 
 Uma linha a mais em um arquivo de 4.000 disparou três alarmes diferentes: a contagem não fecha, a impressão digital não corresponde mais ao que o manifesto registrou, e a soma das divisões deixou de cobrir a origem. Note que o contrato não sabe **o que** você fez, e ainda assim descreve o sintoma com precisão suficiente para o diagnóstico.
@@ -636,7 +636,7 @@ make data
 PYTHONPATH=src .venv/bin/python scripts/validate_data.py > /dev/null
 ```
 
-A última linha precisa voltar a ser `[PASS] 0 of 48 checks failed`. O `make data` regenera tudo do zero a partir da semente, então os hashes voltam a ser os mesmos do Passo 5.
+A última linha precisa voltar a ser `[PASS] 0 de 48 verificações reprovaram`. O `make data` regenera tudo do zero a partir da semente, então os hashes voltam a ser os mesmos do Passo 5.
 
 <details>
 <summary><b>💡 Clique para entender: por que isso roda ANTES de tocar na AWS</b></summary>
@@ -655,7 +655,7 @@ Essa é a versão prática de "falhe cedo, falhe pequeno": a verificação mais 
 
 - [x] `artifacts/data/` tem os seis arquivos.
 - [x] Os prefixos de hash batem com os publicados no Passo 5 (`2013b9725797`, `18a0ddc5d4d8`, `04c4fdee573f`).
-- [x] O contrato responde `[PASS] 0 of 48 checks failed`.
+- [x] O contrato responde `[PASS] 0 de 48 verificações reprovaram`.
 - [x] Você viu o contrato reprovar de verdade no Passo 8 e voltar a aprovar depois do `make data`.
 
 Continua sem nenhum recurso criado na AWS, e continua custando zero.
@@ -726,7 +726,7 @@ A primeira coisa que aparece é o cabeçalho do estágio 1 e, no fim dele, a cri
 
 > **Saída esperada:**
 > ```text
-> == stage 1/2: storage and training job ==
+> == estágio 1/2: storage e training job ==
 > ...
 > random_id.lifecycle: Creation complete after 0s [id=DKmJXQ]
 > terraform_data.bucket: Provisioning with 'local-exec'...
@@ -781,7 +781,7 @@ Repare em `aws_sagemaker_training_job.churn: Creation complete after 1s`. O Terr
 
 > **Saída esperada:**
 > ```text
-> [wait] Completed in 147s billable
+> [wait] Completed em 147s cobrados
 > ```
 
 Essa linha (o número exato varia) é o portão confirmando que o treino terminou e provando o artefato com `HeadObject` antes de liberar o estágio 2. É isso que o próximo passo continua.
@@ -832,7 +832,7 @@ Ainda dentro do mesmo `make apply`, o segundo estágio começa:
 
 > **Saída esperada:**
 > ```text
-> == stage 2/2: model, endpoint configuration and endpoint ==
+> == estágio 2/2: model, endpoint configuration e endpoint ==
 > ...
 > aws_sagemaker_model.churn[0]: Creation complete after 2s [id=prb-cloud-ml-lab1-model-a1b2c3d4]
 > aws_sagemaker_endpoint_configuration.churn[0]: Creation complete after 1s [id=prb-cloud-ml-lab1-epc-a1b2c3d4]
@@ -1011,7 +1011,7 @@ Três prefixos, três papéis: `input/` é o que o treino leu, `metadata/` é o 
 ### Checkpoint
 
 - [x] `Apply complete! Resources: 9 added` no estágio 1.
-- [x] O portão respondeu `Completed in <N>s billable` (a AWS varia isso a cada execução; qualquer valor abaixo de 200s é normal) e verificou o artefato com `HeadObject`.
+- [x] O portão respondeu `Completed em <N>s cobrados` (a AWS varia isso a cada execução; qualquer valor abaixo de 200s é normal) e verificou o artefato com `HeadObject`.
 - [x] `Apply complete! Resources: 3 added` no estágio 2.
 - [x] `endpoint_name` aparece nas saídas do Terraform e o endpoint está `InService`.
 - [x] O `model.tar.gz` aparece na listagem do bucket.
@@ -1037,16 +1037,16 @@ make predict
 > Saída esperada, com os números iguais aos seus:
 > ```text
 > [predict] endpoint prb-cloud-ml-lab1-ep-a1b2c3d4 (InService)
-> [predict] feature order: tenure_months, monthly_charges, support_calls_90d, payment_delay_days, usage_score, annual_contract, premium_plan
-> [predict] request high_risk: 2,220.00,6,30.00,15.00,0,0
-> [predict] request low_risk: 66,45.00,0,0.00,92.00,1,1
-> [predict] response high_risk: p(churn)=0.964739
-> [predict] response low_risk: p(churn)=0.017099
+> [predict] ordem das features: tenure_months, monthly_charges, support_calls_90d, payment_delay_days, usage_score, annual_contract, premium_plan
+> [predict] requisição high_risk: 2,220.00,6,30.00,15.00,0,0
+> [predict] requisição low_risk: 66,45.00,0,0.00,92.00,1,1
+> [predict] resposta high_risk: p(churn)=0.964739
+> [predict] resposta low_risk: p(churn)=0.017099
 >   [PASS] all_finite
 >   [PASS] all_in_unit_interval
 >   [PASS] one_probability_per_row
 >   [PASS] high_risk_scored_above_low_risk
-> [PASS] smoke inference
+> [PASS] inferência de smoke
 > ```
 
 ![](img/16-make-predict.png)
@@ -1113,19 +1113,19 @@ make evaluate
 
 > Saída esperada:
 > ```text
-> [evaluate] scoring 600 held-out rows through prb-cloud-ml-lab1-ep-a1b2c3d4
-> [evaluate] batch 1: 250/600 rows scored
-> [evaluate] batch 2: 500/600 rows scored
-> [evaluate] batch 3: 600/600 rows scored
-> [evaluate] majority baseline accuracy 0.6633
-> [evaluate] accuracy 0.7617 (lift +0.0983)
-> [evaluate] precision 0.6746 recall 0.5644 f1 0.6146
+> [evaluate] pontuando 600 linhas separadas através de prb-cloud-ml-lab1-ep-a1b2c3d4
+> [evaluate] lote 1: 250/600 linhas pontuadas
+> [evaluate] lote 2: 500/600 linhas pontuadas
+> [evaluate] lote 3: 600/600 linhas pontuadas
+> [evaluate] acurácia da baseline majoritária 0.6633
+> [evaluate] acurácia 0.7617 (ganho +0.0983)
+> [evaluate] precisão 0.6746 recall 0.5644 f1 0.6146
 > [evaluate] roc_auc 0.8142 pr_auc 0.6994
 >   [PASS] roc_auc_min: 0.81417 vs 0.75
 >   [PASS] f1_min: 0.614555 vs 0.5
 >   [PASS] beats_majority_accuracy: 0.761667 vs 0.663333
->   [PASS] metrics agree with scikit-learn
-> [evaluate] wrote .../artifacts/evidence/evaluation.json and evaluation.md
+>   [PASS] métricas concordam com o scikit-learn
+> [evaluate] escrevi .../artifacts/evidence/evaluation.json e evaluation.md
 > ```
 
 ![](img/17-make-evaluate.png)
@@ -1251,7 +1251,7 @@ Pare aqui e responda, olhando o seu `evaluation.md`. Não é retórica: as três
 
 ### Checkpoint
 
-- [x] `make predict` termina com `[PASS] smoke inference`, com `0.964739` e `0.017099`.
+- [x] `make predict` termina com `[PASS] inferência de smoke`, com `0.964739` e `0.017099`.
 - [x] `make evaluate` termina com os três critérios em `PASS` e a concordância com o scikit-learn.
 - [x] Você abriu o `evaluation.md` e comparou o modelo com o baseline majoritário.
 - [x] Você respondeu R1, R2 e R3.
@@ -1274,14 +1274,14 @@ make evidence
 
 > Saída esperada:
 > ```text
->   [PASS] storage: dataset generated and fingerprinted
->   [PASS] storage: training channels proven in S3
->   [PASS] training: job reached Completed
->   [PASS] artifact: model.tar.gz proven in S3
+>   [PASS] storage: dataset gerado e com hash registrado
+>   [PASS] storage: canais de treino comprovados no S3
+>   [PASS] training: job chegou a Completed
+>   [PASS] artifact: model.tar.gz comprovado no S3
 >   [PASS] serving: endpoint InService
->   [PASS] serving: deterministic smoke inference passed
->   [PASS] evidence: test-set metrics meet acceptance
-> [PASS] evidence chain -> .../artifacts/evidence/evidence.md
+>   [PASS] serving: inferência de smoke determinística aprovada
+>   [PASS] evidence: métricas de teste atendem a aceitação
+> [PASS] cadeia de evidências -> .../artifacts/evidence/evidence.md
 > ```
 
 Sete elos, sete verificações. Nenhuma delas lê um log ou confia em memória: cada uma consulta a AWS ou recalcula o valor.
@@ -1301,7 +1301,7 @@ code artifacts/evidence/evidence.md
 
 O arquivo começa com uma frase que resume o laboratório:
 
-> A model is not an ML system. Below is the chain that turns one into the other, each link recorded with something checkable.
+> Um modelo não é um sistema de ML. Abaixo está a cadeia que transforma um no outro, cada elo registrado com algo conferível.
 
 São sete seções, e cada uma corresponde a um elo da cadeia. Alguns valores que vale localizar no **seu** arquivo:
 
@@ -1458,11 +1458,11 @@ make verify-clean
 
 > Saída esperada:
 > ```text
->   [PASS] no endpoints for this lab
->   [PASS] no endpoint configs for this lab
->   [PASS] no models for this lab
->   [PASS] no lab bucket
-> [PASS] verify-clean
+>   [PASS] no_endpoint: nenhum endpoint com 'prb-cloud-ml-lab1'
+>   [PASS] no_endpoint_configuration: nenhuma endpoint config com 'prb-cloud-ml-lab1'
+>   [PASS] no_sagemaker_model: nenhum model com 'prb-cloud-ml-lab1'
+>   [PASS] no_lab_bucket: prb-cloud-ml-lab1-123456789012 não existe mais
+> [PASS] não sobrou recurso de serving cobrando
 > ```
 
 ![](img/24-verify-clean.png)
@@ -1498,7 +1498,7 @@ Remove `artifacts/` e os caches do Python. **Nunca toca na AWS.** Só rode se vo
 ### Checkpoint
 
 - [x] `Destroy complete! Resources: 12 destroyed.`
-- [x] `make verify-clean` responde `[PASS] verify-clean` com os quatro itens.
+- [x] `make verify-clean` responde `[PASS] não sobrou recurso de serving cobrando` com os quatro itens.
 
 **Zero recursos cobrando.** O laboratório terminou com a conta no mesmo estado em que começou.
 
@@ -1525,8 +1525,8 @@ O detalhe que importa: a limpeza roda com armadilha de saída (`trap`), ou seja,
 > Existe a variação `make e2e KEEP_RESOURCES=1`, que **não** destrói nada no fim, para quando você quer inspecionar o endpoint depois. Ela avisa em tela:
 >
 > ```text
-> !! KEEP_RESOURCES=1: the endpoint will stay up and keep billing.
-> !! Run 'make destroy' as soon as you are done, or the lab budget pays for it.
+> !! KEEP_RESOURCES=1: o endpoint vai continuar de pé e continuar cobrando.
+> !! Rode 'make destroy' assim que terminar, ou o crédito do lab paga por ele.
 > ```
 >
 > Se você usar essa variação, `make destroy` é responsabilidade sua.
@@ -1629,7 +1629,7 @@ Enquanto isso, se quiser explorar por conta própria, três experimentos valem o
 
 **Convenção de saída dos scripts**
 
-Todo script deste laboratório escreve o **resultado** em `stdout` (JSON) e a **narração** em `stderr` (as linhas com `[PASS]`, `[data]`, `[eval]`). É por isso que o `Makefile` redireciona `stdout` para `/dev/null`: você vê o progresso, e o dado fica disponível para automação sem precisar interpretar log.
+Todo script deste laboratório escreve o **resultado** em `stdout` (JSON) e a **narração** em `stderr` (as linhas com `[PASS]`, `[data]`, `[evaluate]`). É por isso que o `Makefile` redireciona `stdout` para `/dev/null`: você vê o progresso, e o dado fica disponível para automação sem precisar interpretar log.
 
 Na prática, isso significa que qualquer etapa pode ser capturada como dado:
 

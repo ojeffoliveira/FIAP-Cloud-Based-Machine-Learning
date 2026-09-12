@@ -1,13 +1,13 @@
-"""Thin Boto3 and Terraform glue shared by the control scripts.
+"""Cola fina de Boto3 e Terraform compartilhada pelos scripts de controle.
 
-Two rules shape this module:
+Duas regras moldam este módulo:
 
-1. Nothing here ever prints or returns a credential. Identity is reported as
-   account ID / ARN only, which is what evidence needs and what a screenshot can
-   safely show.
-2. Region is asserted, not assumed. The Academy lab only permits `us-east-1`,
-   and a silently wrong region produces confusing "resource not found" errors
-   much later, so every session is validated at construction time.
+1. Nada aqui imprime ou devolve credencial. A identidade é reportada só como ID
+   da conta / ARN, que é o que a evidência precisa e o que um print pode mostrar
+   sem risco.
+2. A região é afirmada, não assumida. O lab do Academy só permite `us-east-1`, e
+   uma região errada em silêncio produz erros confusos de "recurso não
+   encontrado" muito mais tarde, então toda sessão é validada na construção.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from botocore.exceptions import ClientError, NoCredentialsError, TokenRetrievalE
 
 from lab1.config import TERRAFORM_DIR, log
 
-# Retries matter here: Academy accounts are shared and throttling is common.
+# Retry importa aqui: contas do Academy são compartilhadas e throttling é comum.
 BOTO_CONFIG = Config(retries={"max_attempts": 10, "mode": "adaptive"})
 
 TERMINAL_TRAINING_STATUSES = {"Completed", "Failed", "Stopped"}
@@ -32,7 +32,7 @@ TERMINAL_ENDPOINT_STATUSES = {"InService", "Failed", "OutOfService"}
 
 
 class AwsError(RuntimeError):
-    """Actionable failure talking to AWS - message is meant for a student to read."""
+    """Falha acionável ao falar com a AWS - a mensagem é para o aluno ler."""
 
 
 def make_session(region: str, profile: str | None = None) -> boto3.session.Session:
@@ -40,12 +40,12 @@ def make_session(region: str, profile: str | None = None) -> boto3.session.Sessi
     resolved = session.region_name
     if resolved and resolved != region:
         raise AwsError(
-            f"session region is {resolved!r} but this lab requires {region!r}. "
-            f"Export AWS_DEFAULT_REGION={region} or fix the profile."
+            f"a região da sessão é {resolved!r}, mas este lab exige {region!r}. "
+            f"Exporte AWS_DEFAULT_REGION={region} ou corrija o profile."
         )
     if not resolved:
-        # A profile without a region is common in Academy; pin it explicitly
-        # instead of letting each client guess.
+        # Profile sem região é comum no Academy; fixar explicitamente em vez de
+        # deixar cada client adivinhar.
         session = boto3.session.Session(profile_name=profile, region_name=region)
     return session
 
@@ -55,20 +55,20 @@ def client(session: boto3.session.Session, service: str) -> Any:
 
 
 def whoami(session: boto3.session.Session) -> dict[str, str]:
-    """Caller identity without secrets. Fails with a readable message when expired."""
+    """Identidade de quem chama, sem segredos. Falha com mensagem legível quando expira."""
     try:
         identity = client(session, "sts").get_caller_identity()
     except (NoCredentialsError, TokenRetrievalError) as exc:
         raise AwsError(
-            "no usable AWS credentials. In AWS Academy, reopen the lab and copy the "
-            "fresh credentials into your environment or profile."
+            "não há credencial da AWS utilizável. No AWS Academy, reabra o lab e copie "
+            "as credenciais novas para o seu ambiente ou profile."
         ) from exc
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
         if code in {"ExpiredToken", "InvalidClientTokenId", "RequestExpired"}:
             raise AwsError(
-                f"AWS credentials rejected ({code}). Academy session tokens expire; "
-                "start the lab again and refresh them."
+                f"credenciais da AWS recusadas ({code}). O token de sessão do Academy "
+                "expira; inicie o lab de novo e atualize as credenciais."
             ) from exc
         raise
     return {
@@ -79,21 +79,21 @@ def whoami(session: boto3.session.Session) -> dict[str, str]:
 
 
 def resolve_lab_role(session: boto3.session.Session, role_name: str) -> str:
-    """Return the LabRole ARN. Academy forbids creating roles, so it must exist."""
+    """Devolve o ARN da LabRole. O Academy proíbe criar role, então ela precisa existir."""
     try:
         return client(session, "iam").get_role(RoleName=role_name)["Role"]["Arn"]
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
         if code == "NoSuchEntity":
             raise AwsError(
-                f"role {role_name!r} not found. This lab depends on the pre-provisioned "
-                "Academy role and cannot create IAM roles itself."
+                f"role {role_name!r} não encontrada. Este lab depende da role já provisionada "
+                "pelo Academy e não pode criar role de IAM por conta própria."
             ) from exc
         if code == "AccessDenied":
-            # Some Academy policies deny iam:GetRole while still allowing PassRole.
+            # Algumas policies do Academy negam iam:GetRole e ainda assim permitem PassRole.
             identity = whoami(session)
             arn = f"arn:aws:iam::{identity['account_id']}:role/{role_name}"
-            log(f"[warn] iam:GetRole denied; assuming {arn} exists (Academy default)")
+            log(f"[aviso] iam:GetRole negado; assumindo que {arn} existe (padrão do Academy)")
             return arn
         raise
 
@@ -104,7 +104,7 @@ def resolve_lab_role(session: boto3.session.Session, role_name: str) -> str:
 
 
 def terraform_outputs(directory: str | None = None) -> dict[str, Any]:
-    """Read `terraform output -json` and flatten to plain values."""
+    """Lê `terraform output -json` e achata para valores simples."""
     cwd = directory or str(TERRAFORM_DIR)
     try:
         completed = subprocess.run(
@@ -115,9 +115,9 @@ def terraform_outputs(directory: str | None = None) -> dict[str, Any]:
             check=True,
         )
     except FileNotFoundError as exc:
-        raise AwsError("terraform binary not found on PATH") from exc
+        raise AwsError("binário do terraform não encontrado no PATH") from exc
     except subprocess.CalledProcessError as exc:
-        raise AwsError(f"terraform output failed in {cwd}: {exc.stderr.strip()}") from exc
+        raise AwsError(f"terraform output falhou em {cwd}: {exc.stderr.strip()}") from exc
     raw = json.loads(completed.stdout or "{}")
     return {key: value.get("value") for key, value in raw.items()}
 
@@ -125,8 +125,8 @@ def terraform_outputs(directory: str | None = None) -> dict[str, Any]:
 def require_output(outputs: dict[str, Any], key: str) -> Any:
     if key not in outputs or outputs[key] in (None, ""):
         raise AwsError(
-            f"terraform output {key!r} is not available. Run `make apply` first "
-            "(the serving stage only exists after deployment)."
+            f"o terraform output {key!r} não está disponível. Rode `make apply` primeiro "
+            "(o estágio de serving só existe depois do deploy)."
         )
     return outputs[key]
 
@@ -146,7 +146,7 @@ def wait_training_job(
     poll_seconds: int = 20,
     timeout_seconds: int = 3600,
 ) -> dict[str, Any]:
-    """Poll until the job reaches a terminal state, narrating progress to stderr."""
+    """Consulta até o job chegar a um estado terminal, narrando o progresso em stderr."""
     sagemaker = client(session, "sagemaker")
     deadline = time.monotonic() + timeout_seconds
     last_secondary = ""
@@ -161,8 +161,8 @@ def wait_training_job(
             return description
         if time.monotonic() > deadline:
             raise AwsError(
-                f"training job {job_name} still {status}/{secondary} after "
-                f"{timeout_seconds}s; check the SageMaker console or CloudWatch logs"
+                f"o training job {job_name} continua {status}/{secondary} depois de "
+                f"{timeout_seconds}s; confira o console do SageMaker ou os logs do CloudWatch"
             )
         time.sleep(poll_seconds)
 
@@ -183,17 +183,17 @@ def object_exists(session: boto3.session.Session, bucket: str, key: str) -> dict
 
 def split_s3_uri(uri: str) -> tuple[str, str]:
     if not uri.startswith("s3://"):
-        raise AwsError(f"not an S3 URI: {uri!r}")
+        raise AwsError(f"não é uma URI do S3: {uri!r}")
     bucket, _, key = uri[len("s3://") :].partition("/")
     if not bucket or not key:
-        raise AwsError(f"S3 URI missing bucket or key: {uri!r}")
+        raise AwsError(f"URI do S3 sem bucket ou sem key: {uri!r}")
     return bucket, key
 
 
 def invoke_endpoint_csv(
     session: boto3.session.Session, endpoint_name: str, body: str
 ) -> list[float]:
-    """Send headerless CSV and parse one probability per input row."""
+    """Envia CSV sem cabeçalho e lê uma probabilidade por linha de entrada."""
     runtime = client(session, "sagemaker-runtime")
     try:
         response = runtime.invoke_endpoint(
@@ -205,7 +205,7 @@ def invoke_endpoint_csv(
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
         raise AwsError(
-            f"invoke_endpoint failed on {endpoint_name!r} ({code}): "
+            f"invoke_endpoint falhou em {endpoint_name!r} ({code}): "
             f"{exc.response.get('Error', {}).get('Message', '')}"
         ) from exc
     payload = response["Body"].read().decode("utf-8").strip()
@@ -213,7 +213,7 @@ def invoke_endpoint_csv(
 
 
 def parse_csv_probabilities(payload: str, expected: int | None = None) -> list[float]:
-    """Built-in XGBoost answers with newline- or comma-separated probabilities."""
+    """O XGBoost nativo responde com probabilidades separadas por newline ou vírgula."""
     tokens: list[str] = []
     for line in payload.replace("\r", "").split("\n"):
         tokens.extend(token for token in line.split(",") if token.strip())
@@ -221,10 +221,10 @@ def parse_csv_probabilities(payload: str, expected: int | None = None) -> list[f
     for token in tokens:
         value = float(token)
         if not (0.0 <= value <= 1.0):
-            raise AwsError(f"probability out of [0,1]: {value}")
+            raise AwsError(f"probabilidade fora de [0,1]: {value}")
         values.append(value)
     if expected is not None and len(values) != expected:
-        raise AwsError(f"endpoint returned {len(values)} probabilities for {expected} rows")
+        raise AwsError(f"o endpoint devolveu {len(values)} probabilidades para {expected} linhas")
     return values
 
 
@@ -234,7 +234,7 @@ def batched(items: list[Any], size: int) -> Iterable[list[Any]]:
 
 
 def json_safe(value: Any) -> Any:
-    """Make a Boto3 response JSON-serialisable (its timestamps are datetimes)."""
+    """Torna a resposta do Boto3 serializável em JSON (os timestamps são datetime)."""
     if isinstance(value, dict):
         return {k: json_safe(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):

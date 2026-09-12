@@ -1,4 +1,4 @@
-"""Latency statistics and the concurrent load-test runner for `make load`."""
+"""Estatísticas de latência e o executor concorrente de teste de carga do `make load`."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def _single_invoke(session: boto3.session.Session, endpoint_name: str, body: str
             Body=body.encode("utf-8"),
         )
         return True, (time.monotonic() - started) * 1000.0
-    except Exception:  # noqa: BLE001 - a failed/throttled call is a data point, not a crash
+    except Exception:  # noqa: BLE001 - chamada que falha ou toma throttling é dado, não crash
         return False, (time.monotonic() - started) * 1000.0
 
 

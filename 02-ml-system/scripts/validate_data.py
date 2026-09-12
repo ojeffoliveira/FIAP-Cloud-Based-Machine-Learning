@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Run the data contract. Non-zero exit on any violation.
+"""Roda o contrato de dados. Sai com código diferente de zero em qualquer violação.
 
-This runs before anything touches AWS: a dataset that fails here never becomes a
-training job, so no student pays for compute on data nobody checked.
+Isso roda antes de qualquer coisa tocar a AWS: um dataset que reprova aqui nunca
+se torna um training job, então nenhum aluno paga compute por dado que ninguém
+conferiu.
 """
 
 from __future__ import annotations
@@ -25,10 +26,10 @@ def main() -> int:
     cfg, schema = load_config(), load_schema()
     report = validate(cfg, schema, args.data)
 
-    log(f"data contract: {len(report.checks)} checks against {args.data}")
+    log(f"contrato de dados: {len(report.checks)} verificações contra {args.data}")
     for check in report.checks:
         log(f"  [{'PASS' if check.passed else 'FAIL'}] {check.name}: {check.detail}")
-    log(f"[{'PASS' if report.ok else 'FAIL'}] {len(report.failed)} of {len(report.checks)} checks failed")
+    log(f"[{'PASS' if report.ok else 'FAIL'}] {len(report.failed)} de {len(report.checks)} verificações reprovaram")
 
     emit(report.as_dict())
     return 0 if report.ok else 1

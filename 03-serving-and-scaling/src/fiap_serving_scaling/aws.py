@@ -1,10 +1,10 @@
-"""Thin Boto3 and Terraform glue shared by scripts/lab.py.
+"""Cola fina de Boto3 e Terraform compartilhada por scripts/lab.py.
 
-Two rules shape this module:
+Duas regras moldam este módulo:
 
-1. Nothing here ever prints or returns a credential. Identity is reported as
-   account ID / ARN only.
-2. Region is asserted, not assumed. The Academy lab only permits `us-east-1`.
+1. Nada aqui imprime ou devolve credencial. A identidade é reportada só como ID
+   da conta / ARN.
+2. A região é afirmada, não assumida. O lab do Academy só permite `us-east-1`.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ TERMINAL_TRANSFORM_STATUSES = {"Completed", "Failed", "Stopped"}
 
 
 class AwsError(RuntimeError):
-    """Actionable failure talking to AWS - message is meant for a student to read."""
+    """Falha acionável ao falar com a AWS - a mensagem é para o aluno ler."""
 
 
 def make_session(region: str, profile: str | None = None) -> boto3.session.Session:
@@ -37,8 +37,8 @@ def make_session(region: str, profile: str | None = None) -> boto3.session.Sessi
     resolved = session.region_name
     if resolved and resolved != region:
         raise AwsError(
-            f"session region is {resolved!r} but this lab requires {region!r}. "
-            f"Export AWS_DEFAULT_REGION={region} or fix the profile."
+            f"a região da sessão é {resolved!r}, mas este lab exige {region!r}. "
+            f"Exporte AWS_DEFAULT_REGION={region} ou corrija o profile."
         )
     if not resolved:
         session = boto3.session.Session(profile_name=profile, region_name=region)
@@ -61,15 +61,15 @@ def whoami(session: boto3.session.Session) -> dict[str, str]:
         identity = client(session, "sts").get_caller_identity()
     except (NoCredentialsError, TokenRetrievalError) as exc:
         raise AwsError(
-            "no usable AWS credentials. Reopen the Academy Learner Lab and refresh "
-            "the credentials configured for this environment."
+            "não há credencial da AWS utilizável. Reabra o Academy Learner Lab e atualize "
+            "as credenciais configuradas neste ambiente."
         ) from exc
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
         if code in {"ExpiredToken", "InvalidClientTokenId", "RequestExpired"}:
             raise AwsError(
-                f"AWS credentials rejected ({code}). Academy session tokens expire; "
-                "refresh them and try again."
+                f"credenciais da AWS recusadas ({code}). O token de sessão do Academy "
+                "expira; atualize as credenciais e tente de novo."
             ) from exc
         raise
     return {
@@ -86,13 +86,13 @@ def resolve_lab_role(session: boto3.session.Session, role_name: str) -> str:
         code = exc.response.get("Error", {}).get("Code", "")
         if code == "NoSuchEntity":
             raise AwsError(
-                f"role {role_name!r} not found. This lab depends on the pre-provisioned "
-                "Academy role and cannot create IAM roles itself."
+                f"role {role_name!r} não encontrada. Este lab depende da role já provisionada "
+                "pelo Academy e não pode criar role de IAM por conta própria."
             ) from exc
         if code == "AccessDenied":
             identity = whoami(session)
             arn = f"arn:aws:iam::{identity['account_id']}:role/{role_name}"
-            log(f"[warn] iam:GetRole denied; assuming {arn} exists (Academy default)")
+            log(f"[aviso] iam:GetRole negado; assumindo que {arn} existe (padrão do Academy)")
             return arn
         raise
 
@@ -113,9 +113,9 @@ def terraform_outputs(directory: str | None = None) -> dict[str, Any]:
             check=True,
         )
     except FileNotFoundError as exc:
-        raise AwsError("terraform binary not found on PATH") from exc
+        raise AwsError("binário do terraform não encontrado no PATH") from exc
     except subprocess.CalledProcessError as exc:
-        raise AwsError(f"terraform output failed in {cwd}: {exc.stderr.strip()}") from exc
+        raise AwsError(f"terraform output falhou em {cwd}: {exc.stderr.strip()}") from exc
     raw = json.loads(completed.stdout or "{}")
     return {key: value.get("value") for key, value in raw.items()}
 
@@ -123,13 +123,13 @@ def terraform_outputs(directory: str | None = None) -> dict[str, Any]:
 def require_output(outputs: dict[str, Any], key: str) -> Any:
     if key not in outputs or outputs[key] in (None, ""):
         raise AwsError(
-            f"terraform output {key!r} is not available. Run `make apply` first."
+            f"o terraform output {key!r} não está disponível. Rode `make apply` primeiro."
         )
     return outputs[key]
 
 
 # --------------------------------------------------------------------------- #
-# SageMaker: training / models / endpoints
+# SageMaker: treino / models / endpoints
 # --------------------------------------------------------------------------- #
 
 
@@ -157,7 +157,7 @@ def wait_training_job(
             return description
         if time.monotonic() > deadline:
             raise AwsError(
-                f"training job {job_name} still {status}/{secondary} after "
+                f"o training job {job_name} continua {status}/{secondary} depois de "
                 f"{timeout_seconds}s"
             )
         time.sleep(poll_seconds)
@@ -189,7 +189,7 @@ def wait_endpoint_in_service(
         if status in TERMINAL_ENDPOINT_STATUSES:
             return description
         if time.monotonic() > deadline:
-            raise AwsError(f"endpoint {endpoint_name} still {status} after {timeout_seconds}s")
+            raise AwsError(f"o endpoint {endpoint_name} continua {status} depois de {timeout_seconds}s")
         time.sleep(poll_seconds)
 
 
@@ -205,17 +205,17 @@ def object_exists(session: boto3.session.Session, bucket: str, key: str) -> dict
 
 def split_s3_uri(uri: str) -> tuple[str, str]:
     if not uri.startswith("s3://"):
-        raise AwsError(f"not an S3 URI: {uri!r}")
+        raise AwsError(f"não é uma URI do S3: {uri!r}")
     bucket, _, key = uri[len("s3://") :].partition("/")
     if not bucket or not key:
-        raise AwsError(f"S3 URI missing bucket or key: {uri!r}")
+        raise AwsError(f"URI do S3 sem bucket ou sem key: {uri!r}")
     return bucket, key
 
 
 def invoke_endpoint_csv(
     session: boto3.session.Session, endpoint_name: str, body: str
 ) -> tuple[list[float], float]:
-    """Send headerless CSV, return (probabilities, wall_clock_seconds)."""
+    """Envia CSV sem cabeçalho e devolve (probabilidades, segundos de relógio)."""
     runtime = client(session, "sagemaker-runtime")
     started = time.monotonic()
     try:
@@ -228,7 +228,7 @@ def invoke_endpoint_csv(
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
         raise AwsError(
-            f"invoke_endpoint failed on {endpoint_name!r} ({code}): "
+            f"invoke_endpoint falhou em {endpoint_name!r} ({code}): "
             f"{exc.response.get('Error', {}).get('Message', '')}"
         ) from exc
     elapsed = time.monotonic() - started
@@ -251,7 +251,7 @@ def invoke_endpoint_async(
         )
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
-        raise AwsError(f"invoke_endpoint_async failed ({code}): {exc}") from exc
+        raise AwsError(f"invoke_endpoint_async falhou ({code}): {exc}") from exc
     return {
         "inference_id": response["InferenceId"],
         "output_location": response["OutputLocation"],
@@ -267,10 +267,10 @@ def parse_csv_probabilities(payload: str, expected: int | None = None) -> list[f
     for token in tokens:
         value = float(token)
         if not (0.0 <= value <= 1.0):
-            raise AwsError(f"probability out of [0,1]: {value}")
+            raise AwsError(f"probabilidade fora de [0,1]: {value}")
         values.append(value)
     if expected is not None and len(values) != expected:
-        raise AwsError(f"endpoint returned {len(values)} probabilities for {expected} rows")
+        raise AwsError(f"o endpoint devolveu {len(values)} probabilidades para {expected} linhas")
     return values
 
 
@@ -334,7 +334,7 @@ def wait_transform_job(
         if status in TERMINAL_TRANSFORM_STATUSES:
             return description
         if time.monotonic() > deadline:
-            raise AwsError(f"transform job {job_name} still {status} after {timeout_seconds}s")
+            raise AwsError(f"o transform job {job_name} continua {status} depois de {timeout_seconds}s")
         time.sleep(poll_seconds)
 
 
@@ -371,7 +371,7 @@ def register_scalable_target_min_capacity(
     max_capacity: int,
     scalable_dimension: str = "sagemaker:variant:DesiredInstanceCount",
 ) -> None:
-    """Used only by `make scale-demo` to move the floor temporarily and back."""
+    """Usado só pelo `make scale-demo` para mover o piso temporariamente e voltar."""
     aas = client(session, "application-autoscaling")
     aas.register_scalable_target(
         ServiceNamespace="sagemaker",
@@ -388,12 +388,13 @@ def set_endpoint_desired_capacity(
     desired_instance_count: int,
     variant_name: str = "AllTraffic",
 ) -> None:
-    """Force DesiredInstanceCount directly. Registering a lower MaxCapacity with
-    Application Auto Scaling does not by itself scale a variant in: scale-in only
-    happens when the target-tracking alarm evaluates enough datapoints, which can
-    take longer than a classroom demo's timeout. Scaling out (raising MinCapacity
-    above current capacity) does not have this problem, so only the restore side
-    needs this direct call."""
+    """Força o DesiredInstanceCount direto. Registrar um MaxCapacity menor no
+    Application Auto Scaling não reduz a capacidade de uma variant por si só: o
+    scale-in só acontece quando o alarme de target tracking avalia datapoints
+    suficientes, o que pode levar mais tempo que o timeout de uma demonstração em
+    aula. Aumentar a capacidade (subir o MinCapacity acima da capacidade atual) não
+    tem esse problema, então só o lado da restauração precisa desta chamada
+    direta."""
     sagemaker = client(session, "sagemaker")
     sagemaker.update_endpoint_weights_and_capacities(
         EndpointName=endpoint_name,
@@ -417,20 +418,20 @@ def wait_instance_count(
         variants = description.get("ProductionVariants", [])
         current = variants[0]["CurrentInstanceCount"] if variants else 0
         if current != last_count:
-            log(f"[scale] {endpoint_name}: CurrentInstanceCount={current} (target {target_count})")
+            log(f"[scale] {endpoint_name}: CurrentInstanceCount={current} (alvo {target_count})")
             last_count = current
         if current == target_count:
             return current
         if time.monotonic() > deadline:
             raise AwsError(
-                f"endpoint {endpoint_name} did not reach {target_count} instances "
-                f"within {timeout_seconds}s (last seen {current})"
+                f"o endpoint {endpoint_name} não chegou a {target_count} instâncias "
+                f"em {timeout_seconds}s (último valor visto: {current})"
             )
         time.sleep(poll_seconds)
 
 
 # --------------------------------------------------------------------------- #
-# S3 convenience
+# Conveniências de S3
 # --------------------------------------------------------------------------- #
 
 
@@ -465,7 +466,7 @@ def poll_for_object(
         if head is not None:
             return head
         if time.monotonic() > deadline:
-            raise AwsError(f"s3://{bucket}/{key} did not appear within {timeout_seconds}s")
+            raise AwsError(f"s3://{bucket}/{key} não apareceu em {timeout_seconds}s")
         time.sleep(poll_seconds)
 
 

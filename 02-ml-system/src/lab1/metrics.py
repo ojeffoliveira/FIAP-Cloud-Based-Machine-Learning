@@ -1,10 +1,11 @@
-"""Evaluation metrics implemented transparently.
+"""Métricas de avaliação implementadas de forma transparente.
 
-Why not call scikit-learn directly and be done: the first class argues that
-"correct" is a chain of evidence. A metric you cannot open is a link you cannot
-inspect. So the numbers reported by the lab come from the functions below, and
-`scripts/evaluate_endpoint.py` cross-checks them against scikit-learn at runtime
-- if the two disagree, that disagreement itself is recorded as evidence.
+Por que não chamar o scikit-learn direto e pronto: a aula defende que "correto" é
+uma cadeia de evidências. Uma métrica que você não consegue abrir é um elo que
+você não consegue inspecionar. Então os números que o lab reporta vêm das funções
+abaixo, e `scripts/evaluate_endpoint.py` os confere contra o scikit-learn em
+tempo de execução - se os dois discordarem, essa discordância também é registrada
+como evidência.
 """
 
 from __future__ import annotations
@@ -30,14 +31,14 @@ def _as_arrays(y_true: Sequence[float], y_score: Sequence[float]) -> tuple[np.nd
     truth = np.asarray(y_true, dtype=np.int64)
     score = np.asarray(y_score, dtype=np.float64)
     if truth.shape != score.shape:
-        raise ValueError(f"length mismatch: y_true={truth.shape} y_score={score.shape}")
+        raise ValueError(f"tamanhos diferentes: y_true={truth.shape} y_score={score.shape}")
     if truth.size == 0:
-        raise ValueError("cannot compute metrics on an empty vector")
+        raise ValueError("não é possível calcular métricas num vetor vazio")
     invalid = set(np.unique(truth).tolist()) - {0, 1}
     if invalid:
-        raise ValueError(f"y_true must be binary 0/1, found {sorted(invalid)}")
+        raise ValueError(f"y_true precisa ser binário 0/1, encontrei {sorted(invalid)}")
     if not np.all(np.isfinite(score)):
-        raise ValueError("y_score contains non-finite values")
+        raise ValueError("y_score contém valores não finitos")
     return truth, score
 
 
@@ -45,7 +46,7 @@ def confusion_matrix(y_true: Sequence[int], y_pred: Sequence[int]) -> ConfusionM
     truth = np.asarray(y_true, dtype=np.int64)
     pred = np.asarray(y_pred, dtype=np.int64)
     if truth.shape != pred.shape:
-        raise ValueError(f"length mismatch: y_true={truth.shape} y_pred={pred.shape}")
+        raise ValueError(f"tamanhos diferentes: y_true={truth.shape} y_pred={pred.shape}")
     return ConfusionMatrix(
         true_negative=int(np.sum((truth == 0) & (pred == 0))),
         false_positive=int(np.sum((truth == 0) & (pred == 1))),
@@ -75,12 +76,12 @@ def f1(cm: ConfusionMatrix) -> float:
 
 
 def roc_auc(y_true: Sequence[int], y_score: Sequence[float]) -> float:
-    """Rank-based AUC (Mann-Whitney U), with average ranks for tied scores."""
+    """AUC por ranking (Mann-Whitney U), com rank médio para escores empatados."""
     truth, score = _as_arrays(y_true, y_score)
     n_positive = int(truth.sum())
     n_negative = int(truth.size - n_positive)
     if n_positive == 0 or n_negative == 0:
-        raise ValueError("ROC-AUC is undefined when only one class is present")
+        raise ValueError("ROC-AUC é indefinido quando só uma classe está presente")
 
     order = np.argsort(score, kind="mergesort")
     ranks = np.empty(score.size, dtype=np.float64)
@@ -98,7 +99,7 @@ def roc_auc(y_true: Sequence[int], y_score: Sequence[float]) -> float:
 
 
 def average_precision(y_true: Sequence[int], y_score: Sequence[float]) -> float:
-    """PR-AUC as the step-wise sum used by scikit-learn's average_precision_score."""
+    """PR-AUC como a soma em degraus usada pelo average_precision_score do scikit-learn."""
     truth, score = _as_arrays(y_true, y_score)
     order = np.argsort(-score, kind="mergesort")
     truth_sorted = truth[order]
@@ -107,7 +108,7 @@ def average_precision(y_true: Sequence[int], y_score: Sequence[float]) -> float:
     precision_at_k = cumulative_tp / positions
     n_positive = int(truth.sum())
     if n_positive == 0:
-        raise ValueError("average precision is undefined without positive samples")
+        raise ValueError("average precision é indefinida sem amostras positivas")
     return float(np.sum(precision_at_k * truth_sorted) / n_positive)
 
 
@@ -122,7 +123,7 @@ def prevalence(y_true: Sequence[int]) -> float:
 
 
 def majority_baseline_accuracy(y_true: Sequence[int]) -> float:
-    """Accuracy of always predicting the majority class - the bar to beat."""
+    """Acurácia de sempre prever a classe majoritária - a régua a ser batida."""
     p = prevalence(y_true)
     return max(p, 1.0 - p)
 
@@ -130,7 +131,7 @@ def majority_baseline_accuracy(y_true: Sequence[int]) -> float:
 def calibration_bins(
     y_true: Sequence[int], y_score: Sequence[float], bins: int = 5
 ) -> list[dict[str, Any]]:
-    """Coarse reliability diagnostic: predicted vs observed rate per score band."""
+    """Diagnóstico grosso de confiabilidade: taxa prevista vs observada por faixa de escore."""
     truth, score = _as_arrays(y_true, y_score)
     edges = np.linspace(0.0, 1.0, bins + 1)
     report: list[dict[str, Any]] = []
@@ -152,7 +153,7 @@ def calibration_bins(
 def evaluate(
     y_true: Sequence[int], y_score: Sequence[float], threshold: float = 0.5
 ) -> dict[str, Any]:
-    """Full report. Accuracy is present but never alone - that is the lesson."""
+    """Relatório completo. Acurácia aparece, mas nunca sozinha - a lição é essa."""
     truth, score = _as_arrays(y_true, y_score)
     y_pred = (score >= threshold).astype(np.int64)
     cm = confusion_matrix(truth, y_pred)

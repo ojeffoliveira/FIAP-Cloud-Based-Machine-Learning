@@ -1,6 +1,6 @@
-# Exact versions, tested together on Python 3.12.
-# Regenerate deliberately, never with a loose range: a classroom where two
-# students resolve different versions debugs pip instead of ML systems.
+# Versões exatas, testadas juntas no Python 3.12.
+# Regenere de propósito, nunca com faixa aberta: uma sala em que dois alunos
+# resolvem versões diferentes depura pip em vez de sistemas de ML.
 
 boto3==1.43.73
 botocore==1.43.73

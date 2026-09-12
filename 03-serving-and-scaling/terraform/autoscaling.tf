@@ -1,8 +1,9 @@
-# Application Auto Scaling. Real-time gets classic target tracking (1-2
-# instances by invocations/instance/min). Async gets 0-1 target tracking on
-# backlog plus a step-scaling policy wired to the HasBacklogWithoutCapacity
-# CloudWatch alarm, because target tracking alone cannot scale a variant that
-# already has zero instances to measure invocations-per-instance against.
+# Application Auto Scaling. O real-time recebe target tracking clássico (1-2
+# instâncias por invocações/instância/min). O async recebe target tracking de 0-1
+# sobre o backlog, mais uma política de step scaling ligada ao alarme
+# HasBacklogWithoutCapacity do CloudWatch, porque target tracking sozinho não
+# consegue escalar uma variant que já está com zero instância para medir
+# invocações-por-instância.
 
 # --------------------------------------------------------------------------- #
 # Real-Time: 1-2, SageMakerVariantInvocationsPerInstance
@@ -72,9 +73,10 @@ resource "aws_appautoscaling_policy" "async_target_tracking" {
   }
 }
 
-# Scale-from-zero: a step-scaling policy that a CloudWatch alarm on
-# HasBacklogWithoutCapacity invokes, per AWS's documented async autoscaling
-# pattern (target tracking alone never fires from 0 capacity).
+# Escalar a partir de zero: uma política de step scaling que um alarme do
+# CloudWatch em HasBacklogWithoutCapacity dispara, seguindo o padrão de
+# autoscaling assíncrono documentado pela AWS (target tracking sozinho nunca
+# dispara com capacidade 0).
 resource "aws_appautoscaling_policy" "async_scale_from_zero" {
   count = var.deploy_serving ? 1 : 0
 

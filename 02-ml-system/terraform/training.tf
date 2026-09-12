@@ -1,23 +1,24 @@
-# SageMaker training job.
+# Training job do SageMaker.
 #
-# Two behaviours of this resource in provider 6.60.0 shape the whole design:
-#   1. create returns as soon as the job reaches InProgress - it does NOT wait
-#      for Completed, so a green apply is not a trained model;
-#   2. it exports only `arn` and `tags_all` - there is no computed artifact URI.
-# Hence the artifact is resolved out-of-band by scripts/wait_training.py.
+# Dois comportamentos deste recurso no provider 6.60.0 moldam todo o desenho:
+#   1. o create retorna assim que o job entra em InProgress - ele NÃO espera pelo
+#      Completed, então um apply verde não é um modelo treinado;
+#   2. ele exporta apenas `arn` e `tags_all` - não existe URI de artefato
+#      calculada.
+# Por isso o artefato é resolvido por fora, no scripts/wait_training.py.
 #
-# `s3_data_distribution_type` is set explicitly on every channel: when omitted,
-# provider 6.60.0 sends "ShardedByS3Key" (verified with DescribeTrainingJob) and
-# then fails the apply with "Provider produced inconsistent result after apply".
-# The AWS API default is "FullyReplicated", which is what a single-instance job
-# training on the whole dataset actually needs.
+# O `s3_data_distribution_type` é declarado explicitamente em todo canal: quando
+# omitido, o provider 6.60.0 envia "ShardedByS3Key" (conferido com
+# DescribeTrainingJob) e depois derruba o apply com "Provider produced
+# inconsistent result after apply". O padrão da API da AWS é "FullyReplicated",
+# que é o que um job de uma instância treinando no dataset inteiro precisa.
 resource "aws_sagemaker_training_job" "churn" {
   training_job_name = local.training_job_name
   role_arn          = data.aws_iam_role.lab_role.arn
 
   hyper_parameters = var.hyperparameters
 
-  # Left disabled to match the Academy preflight that is known to work.
+  # Deixado desligado para casar com a verificação prévia do Academy que se sabe que funciona.
   enable_network_isolation = false
 
   algorithm_specification {

@@ -1,4 +1,4 @@
-# Exact versions, pinned so every student's run resolves the same graph.
+# Versões exatas, fixadas para a execução de todo aluno resolver o mesmo grafo.
 boto3==1.43.73
 botocore==1.43.73
 numpy==2.5.2

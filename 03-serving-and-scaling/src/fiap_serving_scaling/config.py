@@ -1,7 +1,7 @@
-"""Paths, constants and log helper shared by every command in scripts/lab.py.
+"""Caminhos, constantes e o helper de log usados por todo comando de scripts/lab.py.
 
-Convention enforced across the whole lab: stdout carries the *result* (data a
-caller may pipe or capture), stderr carries progress and diagnostics.
+Convenção válida para o lab inteiro: stdout carrega o *resultado* (o dado que
+alguém pode pipar ou capturar), stderr carrega progresso e diagnóstico.
 """
 
 from __future__ import annotations
@@ -35,12 +35,12 @@ MANIFEST_FILE = "dataset_manifest.json"
 
 
 def log(*args: Any) -> None:
-    """Progress/diagnostic output. Never stdout, so `cmd | tail` stays clean."""
+    """Progresso/diagnóstico. Nunca em stdout, para `cmd | tail` sair limpo."""
     print(*args, file=sys.stderr, flush=True)
 
 
 def emit(payload: Any) -> None:
-    """The one result a caller might capture, as JSON on stdout."""
+    """O único resultado que alguém pode capturar, como JSON em stdout."""
     print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True))
 
 
