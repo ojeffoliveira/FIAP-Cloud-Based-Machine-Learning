@@ -526,8 +526,8 @@ make apply
 ```text
 Error: Unsupported Terraform Core version
 
-  on versions.tf line 4, in terraform:
-   4:   required_version = "= 1.15.8"
+  on versions.tf line 5, in terraform:
+   5:   required_version = "= 1.15.8"
 ```
 
 Seu Codespaces tem uma versão de Terraform diferente da que este laboratório fixa. Acontece com quem criou o ambiente em aulas passadas e não fez rebuild: o `.devcontainer/` instala a **1.15.8**, mas um Codespaces antigo pode ter ficado numa anterior.
