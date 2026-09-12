@@ -159,8 +159,8 @@ make setup
 
 > Saída esperada (leva de 30 a 90 segundos):
 > ```text
-> ==> terraform 1.15.6 disponível
-> ==> terraform : Terraform v1.15.6
+> ==> terraform 1.15.8 disponível
+> ==> terraform : Terraform v1.15.8
 > ==> python    : Python 3.x.x
 > ==> pronto. Próximo passo: make doctor
 > ```
@@ -282,8 +282,7 @@ make doctor
 > [PASS] verificação prévia
 > ```
 
-> 📸 Print 01 — capture o terminal com as quatro linhas `_reachable : ok` e a linha final `[PASS] verificação prévia`: mostra ao aluno que o ambiente está pronto antes de qualquer custo.
-<!-- ![](img/01-make-doctor.png) -->
+![](img/01-make-doctor.png)
 
 <details>
 <summary><b>⚠ Se der erro: <code>ExpiredToken</code> ou credencial rejeitada</b></summary>
@@ -358,8 +357,7 @@ make data
 > [data] escrito em /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling/artifacts/data
 > ```
 
-> 📸 Print 02 — capture as três linhas `train`/`validation`/`test` com as contagens e a prevalência.
-<!-- ![](img/02-make-data.png) -->
+![](img/02-make-data.png)
 
 <details>
 <summary><b>💡 Clique para entender: por que este dataset é diferente do Lab 02</b></summary>
@@ -422,8 +420,7 @@ make validate-data
 > async_payload.csv  ca70dcbed6bcef920906ccbe1b4e364c39c5c59702f214d892c21778e5ddf49d
 > ```
 
-> 📸 Print 03 — capture os 13 `[PASS]` e a linha final `[PASS] contrato de dados`.
-<!-- ![](img/03-contrato-13-checks.png) -->
+![](img/03-contrato-13-checks.png)
 
 `test_features.csv` e `batch_input.csv` têm o mesmo hash de propósito: são o mesmo conjunto de 600 linhas de teste, usado por dois canais diferentes (invocação direta vs. transform job).
 
@@ -518,6 +515,32 @@ make apply
 ```
 
 `make apply` já apaga esse arquivo no início do estágio 1, então isso só importa se você rodou `terraform apply` manualmente por fora do `make`.
+
+</blockquote>
+</details>
+
+<details>
+<summary><b>⚠ Se der erro: <code>Unsupported Terraform Core version</code></b></summary>
+<blockquote>
+
+```text
+Error: Unsupported Terraform Core version
+
+  on versions.tf line 4, in terraform:
+   4:   required_version = "= 1.15.8"
+```
+
+Seu Codespaces tem uma versão de Terraform diferente da que este laboratório fixa. Acontece com quem criou o ambiente em aulas passadas e não fez rebuild: o `.devcontainer/` instala a **1.15.8**, mas um Codespaces antigo pode ter ficado numa anterior.
+
+Confira o que você tem e instale a versão da disciplina — o `setup.sh` do Lab 02 baixa o binário oficial e confere o SHA-256 antes de instalar:
+
+```bash
+terraform version
+cd /workspaces/FIAP-Cloud-Based-Machine-Learning/02-ml-system && make setup
+cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling && make plan
+```
+
+O pino é exato (`=`, não `~>`) de propósito: numa sala em que cada aluno resolve uma versão diferente, a aula vira depuração de Terraform em vez de sistemas de ML.
 
 </blockquote>
 </details>
