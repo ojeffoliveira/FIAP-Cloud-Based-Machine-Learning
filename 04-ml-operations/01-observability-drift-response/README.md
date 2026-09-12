@@ -55,9 +55,18 @@ decisão sua, escrita, sobre retreinar ou não.
 
 ## Arquitetura
 
-O caminho principal é o mesmo dos labs anteriores: dados no S3, training job, modelo,
-endpoint. Nada aqui é novo, e é justamente esse o ponto de partida — este é o sistema que
-já estava no ar e funcionando.
+![Arquitetura do Lab 04.1: o caminho do dado vai do Amazon S3 para o SageMaker Training Job churn-v1, dele para o SageMaker Model e para o Real-Time Endpoint InService; o Codespaces invoca o endpoint e publica o PSI no CloudWatch, que compara com o limiar, dispara o alarme, aciona o EventBridge e a Lambda drift_response, que escreve o incidente em JSON no S3 — nenhuma seta volta da Lambda para o SageMaker.](diagramas/arquitetura.png)
+
+O caminho do dado (linhas sólidas) é o mesmo dos labs anteriores e para no endpoint. Tudo o
+que este lab acrescenta é o laço tracejado de observabilidade e reação: o PSI publicado no
+CloudWatch, o alarme que compara com o limiar, o EventBridge que traduz o alarme em evento e
+a Lambda que abre o incidente. O vermelho marca o caminho do incidente, e a ausência de
+qualquer seta de volta ao SageMaker é o conteúdo da Parte 5. Fonte editável em
+[`diagramas/arquitetura.excalidraw`](diagramas/arquitetura.excalidraw).
+
+Vale ver o mesmo desenho em duas camadas. O caminho principal é o dos labs anteriores: dados
+no S3, training job, modelo, endpoint. Nada aqui é novo, e é justamente esse o ponto de
+partida — este é o sistema que já estava no ar e funcionando.
 
 ```mermaid
 flowchart LR
@@ -143,6 +152,8 @@ o conteúdo da Parte 5.
 Os 20 minutos da Parte 2 são quase todos espera: o `make apply` leva de 10 a 15 minutos
 treinando o modelo e subindo o endpoint, e nesse intervalo não há nada para fazer além de
 ler. Use o tempo para abrir os blocos `💡` da Parte 2.
+
+Travou em algum passo? Clique no número na tabela acima para pular direto para ele.
 
 ## Onde estamos na história?
 
@@ -441,6 +452,14 @@ laboratório.
 </blockquote>
 </details>
 
+### Checkpoint
+
+- [x] `make doctor` termina com todos os checks em `[PASS]`.
+- [x] Os seis checks de alcance de serviço respondem `ok`.
+- [x] Você sabe dizer, olhando o `make help`, em que ordem os alvos são usados.
+
+Nenhum recurso foi criado na AWS até aqui.
+
 ---
 
 <a id="parte-2"></a>
@@ -667,6 +686,17 @@ make apply
 </blockquote>
 </details>
 
+### Checkpoint
+
+- [x] `artifacts/data/` tem os sete arquivos base mais o `dataset_manifest.json`.
+- [x] Os sete hashes SHA-256 conferem com os do README.
+- [x] `[PASS] contrato de dados: 18/18 verificações passaram`.
+- [x] `make apply` fechou os dois estágios e o endpoint está `InService`.
+
+A partir daqui existe recurso cobrando na sua conta: o endpoint `ml.m5.large` fica ligado
+até o `make destroy` da Parte 7. Se precisar parar a aula no meio, rode `make destroy`
+agora e recomece desta Parte depois.
+
 ---
 
 <a id="parte-3"></a>
@@ -872,7 +902,7 @@ linha `[metricas] 13 datapoints publicados` apareceu.
 
 O que você deve ver:
 
-- Faixa 1: `Invocações` com algumas centenas, `4XX`/`5XX` em zero, latência baixa
+- Faixa 1: `Invocações` com algumas dezenas (~30), `4XX`/`5XX` em zero, latência baixa
 - Faixa 2: `PSI máximo` num ponto baixo, **bem abaixo** da linha vermelha do limiar
 - Faixa 3: `PSI do score` baixo; taxa prevista e probabilidade média em valores modestos
 - Faixa 4: vazia, porque ainda não existe ground truth
@@ -885,6 +915,15 @@ falta de implementação.
 
 > 📸 Print 01 — capture o dashboard inteiro com a linha de base saudável: PSI abaixo do limiar, alarme em `OK`, faixa 4 vazia. É o "antes" da comparação que o passo 16 vai fechar.
 <!-- ![](img/01-dashboard-baseline.png) -->
+
+### Checkpoint
+
+- [x] O dashboard existe com 12 widgets e você deixou a aba aberta.
+- [x] `make baseline` publicou as métricas da janela saudável.
+- [x] PSI máximo **abaixo** de 0,20 e alarme em `OK`.
+- [x] A faixa 4 está vazia, e você sabe dizer por quê.
+
+Você tem o "antes" da comparação. Nada nesta tela olhou um rótulo verdadeiro.
 
 ---
 
@@ -975,6 +1014,15 @@ que quase todos vão sair.
 Se a Helena olhasse só esta tela, teria duas leituras possíveis: "a empresa está perdendo
 a base" ou "o modelo enlouqueceu". A tela não decide entre as duas. Para isso falta o
 rótulo verdadeiro, e ele chega na Parte 6.
+
+### Checkpoint
+
+- [x] `make drift` publicou PSI máximo **acima** de 0,20.
+- [x] Você sabe nomear a feature responsável pelo maior PSI.
+- [x] O PSI das predições também subiu, junto com a taxa de churn prevista.
+- [x] Você sabe explicar por que nada disso ainda prova que o modelo está errado.
+
+O endpoint continua `InService` e sem erro de HTTP. É esse o incômodo da Parte 4.
 
 ---
 
@@ -1165,6 +1213,16 @@ Vale abrir o incidente e ler o que ele diz:
 aws s3 cp s3://$(terraform -chdir=terraform output -raw bucket_name)/incidents/ . --recursive --exclude '*' --include '*.json' && cat *.json | head -40
 ```
 
+### Checkpoint
+
+- [x] O alarme de drift chegou a `ALARM`, com o motivo registrado pelo CloudWatch.
+- [x] A Lambda foi invocada pelo EventBridge (aparece no log).
+- [x] Existe um JSON de incidente em `incidents/` no S3, e você leu o conteúdo.
+- [x] **Nenhum** training job novo foi criado depois do alarme.
+
+O último item é o mais importante da Parte 5: o sistema reagiu abrindo um incidente, não
+retreinando. Essa ausência foi projetada.
+
 ---
 
 <a id="parte-6"></a>
@@ -1326,7 +1384,7 @@ prova, inclusive que ninguém demonstrou aqui que retreinar resolveria.
 
 **22. Escreva a sua decisão**
 
-Abra o `DECISION.md` deste laboratório e preencha as nove seções. Ele está em branco de
+Abra o `DECISION.md` deste laboratório e preencha as dez seções. Ele está em branco de
 propósito: as perguntas-guia estão lá, as respostas são suas.
 
 Escreva como se a Helena fosse ler — porque, na prática, é ela quem lê. O exercício não é
@@ -1363,6 +1421,16 @@ Bora Fibra. Os números do seu gatilho têm que sair da evidência que você med
 
 </blockquote>
 </details>
+
+### Checkpoint
+
+- [x] `make ground-truth` mostrou a queda de F1 e de ROC-AUC entre as duas janelas.
+- [x] Você sabe nomear o modo de falha (o modelo prevê churn demais).
+- [x] `make evidence` gerou o dossiê em `artifacts/evidence/`, com as oito seções.
+- [x] Você preencheu as dez seções do `DECISION.md`, incluindo as duas condições.
+
+Agora o drift deixou de ser sinal e passou a ser perda medida. A decisão é sua, e está
+escrita.
 
 ---
 
@@ -1446,6 +1514,15 @@ de endpoint: ele é o recurso que cobra por hora.
 
 </blockquote>
 </details>
+
+### Checkpoint
+
+- [x] `make destroy` terminou sem erro.
+- [x] `make verify-clean` fecha com os 10 checks em `[PASS]`.
+- [x] Em especial, `no_endpoint` e `no_dashboard` passaram.
+
+A conta está limpa e você tem a prova por consulta direta à API, não pela palavra do state
+do Terraform. É assim que se encerra um laboratório.
 
 ---
 

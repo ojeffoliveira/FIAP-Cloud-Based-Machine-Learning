@@ -21,7 +21,7 @@ PSI, publica métricas customizadas no CloudWatch, acompanha um dashboard em tem
 real, vê um alarme virar incidente via EventBridge e Lambda, mede a queda de qualidade
 quando o ground truth chega — e escreve a decisão sobre retreinar ou não.
 
-Duração: ~60 minutos. Continua a linhagem `churn-v1` do Lab 02.
+Duração: ~70 minutos. Continua a linhagem `churn-v1` do Lab 02.
 
 ### 04.2 — SLM no SageMaker
 
