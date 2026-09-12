@@ -23,7 +23,7 @@ from typing import Any
 import boto3
 import numpy as np
 from botocore.config import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError, TokenRetrievalError
 
 from . import config
 
@@ -106,8 +106,15 @@ def output(name: str) -> Any:
 
 
 def caller_identity() -> dict[str, str]:
+    # NoCredentialsError e TokenRetrievalError não derivam de ClientError: sem estes dois
+    # primeiro, o aluno sem credencial colada vê traceback do botocore no lugar do [FAIL].
     try:
         return client("sts").get_caller_identity()
+    except (NoCredentialsError, TokenRetrievalError) as exc:
+        raise LabError(
+            "não há credencial da AWS utilizável neste ambiente. Abra o painel do lab no "
+            "AWS Academy e cole as credenciais em ~/.aws/credentials."
+        ) from exc
     except ClientError as exc:
         raise LabError(
             "credencial da AWS inválida ou expirada. No AWS Academy, abra o painel do "
@@ -118,6 +125,11 @@ def caller_identity() -> dict[str, str]:
 def role_arn(role_name: str) -> str:
     try:
         return client("iam").get_role(RoleName=role_name)["Role"]["Arn"]
+    except (NoCredentialsError, TokenRetrievalError) as exc:
+        raise LabError(
+            "não há credencial da AWS utilizável neste ambiente. Abra o painel do lab no "
+            "AWS Academy e cole as credenciais em ~/.aws/credentials."
+        ) from exc
     except ClientError as exc:
         raise LabError(
             f"não foi possível ler a role {role_name!r}. Ela é criada pelo próprio "
