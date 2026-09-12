@@ -1,11 +1,3 @@
-<!--
-CONVENÇÃO DE PRINTS DESTE README (nota para o professor, não aparece renderizada)
-
-Cada bloco "> 📸 Print NN" abaixo marca o lugar exato onde a imagem entra, com o que
-capturar e o que aquela imagem prova. Depois de salvar o arquivo em `img/`, troque o
-bloco pela linha de imagem que está comentada logo abaixo dele.
--->
-
 # 03 - Serving and Scaling
 
 Antes de começar, o setup do ambiente é o [Lab 01 - Setup e configuração de ambiente](../01-create-codespaces/README.md). O [Lab 02 - Do modelo ao sistema de Machine Learning](../02-ml-system/README.md) é a referência conceitual deste laboratório (o mesmo padrão de dois estágios, o mesmo jeito de ler o artefato pela API), mas este lab **não depende de nenhum arquivo runtime do Lab 02**: ele gera o próprio treino do zero.
@@ -576,8 +568,8 @@ make apply
 > Apply complete! Resources: 13 added, 0 changed, 0 destroyed.
 > ```
 
-> 📸 Print 04 — capture o `Apply complete!` do estágio 2 e as três linhas `Creation complete` dos endpoints.
-<!-- ![](img/04-make-apply.png) -->
+![](img/04-make-apply.png)
+![](img/04-make-apply2.png)
 
 Repare que o job de treino é criado em 1 segundo, mas o treino em si não termina em 1 segundo: o Terraform submete o job, e é o portão (`wait-training` dentro de `make apply`) que espera o resultado real e prova o artefato antes do segundo estágio.
 
@@ -719,11 +711,12 @@ cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling
 JSON=$(make status)
 echo "$JSON" | python3 -m json.tool 2>/dev/null | head -20
 ```
+![](img/05-terminal-endpoints.png)
 
 Se preferir ver com os próprios olhos, abra o console do SageMaker em [Endpoints](https://us-east-1.console.aws.amazon.com/sagemaker/home?region=us-east-1#/endpoints) — você deve ver três endpoints com o prefixo `prb-cloud-ml-lab2`, todos `InService`. A prova que o lab usa para seguir em frente continua sendo a saída do Passo 11.
 
-> 📸 Print 05 — capture a lista do console com os três endpoints e a coluna `Status` mostrando `InService` nos três.
-<!-- ![](img/05-console-endpoints.png) -->
+
+![](img/05-console-endpoints.png)
 
 ### Checkpoint
 
@@ -756,8 +749,7 @@ make compare
 > [compare] predictions_match=True (tolerância 1e-06)
 > ```
 
-> 📸 Print 06 — capture as linhas `first`/`warm_p50`/`warm_p95` dos dois modos e a linha `predictions_match=True`.
-<!-- ![](img/06-make-compare.png) -->
+![](img/06-make-compare.png)
 
 `predictions_match=True` é o que importa mais do que os milissegundos: prova que o mesmo artefato responde igual nos dois modos. A diferença de latência entre `first` (6,4s) e `warm_p50` (472ms) no serverless é o comportamento de "primeira chamada" que a Helena precisa entender antes de escolher esse modo para o app: depois de aquecido, o serverless anda junto com o real-time; a conta chega inteira só na primeira invocação depois de um período ocioso.
 
@@ -831,8 +823,7 @@ make async
 > [async] input_count=50 output_count=50
 > ```
 
-> 📸 Print 07 — capture o `InferenceId`, o `output` e a linha `input_count=50 output_count=50`.
-<!-- ![](img/07-make-async.png) -->
+![](img/07-make-async.png)
 
 O `InferenceId` e o `output` location vêm da própria chamada `InvokeEndpointAsync`; o lab nunca monta esse caminho por convenção.
 
@@ -912,8 +903,8 @@ Mecânica: sobe `batch_input.csv` (as mesmas 600 linhas de `test_features.csv`) 
 > [batch] output_count=600 duração_observada=119.725s
 > ```
 
-> 📸 Print 08 — capture o `Completed` e a linha `output_count=600`.
-<!-- ![](img/08-make-batch.png) -->
+
+![](img/08-make-batch.png)
 
 <details>
 <summary><b>⚠ Se der erro: job de transform ficando muito tempo em <code>InProgress</code></b></summary>
@@ -966,8 +957,7 @@ make load
 > [load] concurrency=8   requests=120  success_rate=1.0 p50=435.739ms p95=464.961ms rps=17.82
 > ```
 
-> 📸 Print 09 — capture os três níveis com `success_rate`/`p50`/`p95`/`rps`.
-<!-- ![](img/09-make-load.png) -->
+![](img/09-make-load.png)
 
 O critério de aprovação é `success_rate >= 0.99` em todos os níveis; a latência é registrada, não comparada contra um número fixo.
 
@@ -1018,8 +1008,8 @@ make scale-demo
 > [scale] restaurado: 1
 > ```
 
-> 📸 Print 10 — capture as três linhas `antes`/`escalado`/`restaurado`, a prova do 1→2→1.
-<!-- ![](img/10-make-scale-demo.png) -->
+
+![](img/10-make-scale-demo.png)
 
 A espera de cada transição pode variar; o timeout é de até 600 segundos por transição.
 
@@ -1089,8 +1079,7 @@ make evidence
 > [evidence] chain_complete=True
 > ```
 
-> 📸 Print 11 — capture a linha `chain_complete=True`.
-<!-- ![](img/11-make-evidence.png) -->
+![](img/11-make-evidence.png)
 
 O `chain_complete` só fica `True` se **todas** as afirmações anteriores (treino completo, três endpoints `InService`, predictions equivalentes, async e batch corretos, load acima de 99%, scale-demo 1→2→1) ainda se sustentarem numa consulta fresca à API, não um checklist marcado de memória.
 
@@ -1158,8 +1147,7 @@ make destroy
 > Destroy complete! Resources: 22 destroyed.
 > ```
 
-> 📸 Print 12 — capture a linha `Destroy complete! Resources: 22 destroyed.`.
-<!-- ![](img/12-make-destroy.png) -->
+![](img/12-make-destroy.png)
 
 Vinte e dois: os nove do estágio 1 (bucket, suas três configurações de segurança, quatro objetos S3 e o training job) mais os treze do estágio 2 (model, três endpoint configs, três endpoints, dois scalable targets, três políticas de scaling e um alarme). O Terraform destrói na ordem inversa da criação: os endpoints e políticas de scaling saem antes do bucket.
 
@@ -1222,8 +1210,8 @@ make verify-clean
 > [PASS] verificação de limpeza
 > ```
 
-> 📸 Print 13 — capture os oito `[PASS]` e a linha final `[PASS] verificação de limpeza`, o fechamento do lab.
-<!-- ![](img/13-verify-clean.png) -->
+
+![](img/13-verify-clean.png)
 
 Este comando **não olha o state do Terraform**: ele pergunta direto às APIs se sobrou endpoint, config, modelo, scalable target, política, alarme ou bucket com o prefixo `prb-cloud-ml-lab2`. Um training/transform job antigo com status `Completed` pode continuar listado — isso não é falha, porque não é um recurso ativo faturável.
 
