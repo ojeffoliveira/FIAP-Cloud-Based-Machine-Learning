@@ -1,16 +1,16 @@
-# Single source of truth for the Python side of Lab 1.
-# Terraform-side constants (image URI, instance types, hyperparameters) live in
-# terraform/variables.tf so that the IaC stays readable on its own; the values
-# that BOTH sides depend on are the S3 prefixes, and those flow from Terraform
-# outputs into Python (never the other way around).
+# Fonte única de verdade para o lado Python do Lab 02.
+# As constantes do lado Terraform (URI da imagem, tipos de instância,
+# hiperparâmetros) vivem em terraform/variables.tf, para a IaC continuar legível
+# por si só; os valores de que os DOIS lados dependem são os prefixos do S3, e
+# eles fluem dos outputs do Terraform para o Python (nunca o contrário).
 
 schema_version: "1.0.0"
 
 region: us-east-1
 
-# Mirrored in terraform/variables.tf. Keep both in sync manually: there is no
-# automated check, and verify-clean has to find the bucket after `destroy` has
-# already thrown away the Terraform outputs.
+# Espelhado em terraform/variables.tf. Mantenha os dois em sincronia à mão: não
+# existe verificação automática, e o verify-clean precisa achar o bucket depois de
+# o `destroy` já ter jogado fora os outputs do Terraform.
 aws:
   execution_role_name: LabRole
   bucket_prefix: prb-cloud-ml-lab1
@@ -33,9 +33,9 @@ dataset:
     validation: 0.15
     test: 0.15
 
-# Feasible bounds enforced by scripts/validate_data.py. These are contract
-# bounds, not the generator's distribution parameters: a value outside them
-# means the generator or the file drifted.
+# Limites viáveis, cobrados por scripts/validate_data.py. São limites de contrato,
+# não os parâmetros de distribuição do gerador: um valor fora deles significa que
+# o gerador ou o arquivo saiu do lugar.
 bounds:
   tenure_months: [1, 72]
   monthly_charges: [20.0, 260.0]
@@ -45,8 +45,8 @@ bounds:
   annual_contract: [0, 1]
   premium_plan: [0, 1]
 
-# Widened around the ~1/3 the generator actually produces. A run outside this
-# band means the generator changed, and every downstream threshold is suspect.
+# Faixa alargada em torno do ~1/3 que o gerador de fato produz. Uma execução fora
+# dessa banda significa que o gerador mudou, e todo limiar a jusante fica suspeito.
 prevalence_range: [0.20, 0.50]
 
 min_rows_per_split: 400

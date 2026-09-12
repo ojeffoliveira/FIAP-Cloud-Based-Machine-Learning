@@ -1,9 +1,9 @@
-# Serving stage. Created only when var.deploy_serving is true, i.e. after the
-# training job finished and its artifact was proven to exist in S3.
+# Estágio de serving. Criado só quando var.deploy_serving é true, ou seja, depois
+# de o training job terminar e o artefato dele ser comprovado no S3.
 #
-# The inference container is the same image that trained the model: a mismatch
-# between training and serving runtimes is one of the classic ways an ML system
-# breaks after "the model worked".
+# O container de inferência é a mesma imagem que treinou o modelo: divergência
+# entre o runtime de treino e o de serving é uma das formas clássicas de um
+# sistema de ML quebrar depois que "o modelo funcionou".
 
 resource "aws_sagemaker_model" "churn" {
   count = var.deploy_serving ? 1 : 0
@@ -19,7 +19,7 @@ resource "aws_sagemaker_model" "churn" {
   lifecycle {
     precondition {
       condition     = var.model_artifact_uri != ""
-      error_message = "model_artifact_uri is empty. Run `make apply`, which resolves it from DescribeTrainingJob before deploying."
+      error_message = "model_artifact_uri está vazio. Rode `make apply`, que resolve esse valor pelo DescribeTrainingJob antes de publicar."
     }
   }
 }

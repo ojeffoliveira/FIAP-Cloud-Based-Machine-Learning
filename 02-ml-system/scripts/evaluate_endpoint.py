@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Evaluate the held-out test set through the deployed endpoint.
+"""Avalia o conjunto de teste separado através do endpoint publicado.
 
-The test set is scored where it matters - across the network, through the same
-serving path a caller would use - not in-process against a local model object.
-That is the difference between "the model works" and "the system works".
+O conjunto de teste é pontuado onde importa - pela rede, pelo mesmo caminho de
+serving que um chamador usaria - e não em memória contra um objeto de modelo
+local. É essa a diferença entre "o modelo funciona" e "o sistema funciona".
 
-Accuracy is reported next to the majority-class baseline on purpose: on a dataset
-with ~34% positives, predicting "never churns" already scores ~66%.
+A acurácia é reportada ao lado da baseline da classe majoritária de propósito: num
+dataset com ~34% de positivos, prever "nunca cancela" já acerta ~66%.
 """
 
 from __future__ import annotations
@@ -41,12 +41,12 @@ def read_test_set(data: Path) -> tuple[list[str], list[int], list[int]]:
     ids = [int(row[0]) for row in label_rows]
     labels = [int(row[1]) for row in label_rows]
     if not (len(rows) == len(labels)):
-        raise aws.AwsError(f"{len(rows)} feature rows but {len(labels)} labels - dataset is inconsistent")
+        raise aws.AwsError(f"{len(rows)} linhas de features e {len(labels)} rótulos - dataset inconsistente")
     return rows, labels, ids
 
 
 def cross_check_with_sklearn(labels: list[int], scores: list[float], report: dict) -> dict:
-    """Independent second opinion on our own metric code."""
+    """Segunda opinião independente sobre o nosso próprio código de métricas."""
     try:
         from sklearn.metrics import (
             accuracy_score,
@@ -81,46 +81,46 @@ def to_markdown(result: dict) -> str:
     cm = r["confusion_matrix"]
     accepted = result["acceptance"]
     lines = [
-        "# Lab 1 - test-set evaluation",
+        "# Lab 02 - avaliação no conjunto de teste",
         "",
         f"- Endpoint: `{result['endpoint_name']}`",
-        f"- Samples: {r['samples']}",
-        f"- Positive-class prevalence: {r['prevalence']:.4f}",
-        f"- Decision threshold: {r['decision_threshold']} "
-        "(fixed for teaching purposes, not a production choice)",
-        f"- Requests sent: {result['requests_sent']} batches of up to {result['batch_size']} rows",
+        f"- Amostras: {r['samples']}",
+        f"- Prevalência da classe positiva: {r['prevalence']:.4f}",
+        f"- Limiar de decisão: {r['decision_threshold']} "
+        "(fixo por motivo didático, não é uma escolha de produção)",
+        f"- Requisições enviadas: {result['requests_sent']} lotes de até {result['batch_size']} linhas",
         "",
-        "## Why accuracy alone is not the answer",
+        "## Por que acurácia sozinha não responde",
         "",
-        f"| Predictor | Accuracy |",
+        f"| Preditor | Acurácia |",
         f"|---|---|",
-        f"| Always predict the majority class | {r['majority_baseline_accuracy']:.4f} |",
-        f"| Deployed model | {r['accuracy']:.4f} |",
+        f"| Sempre prever a classe majoritária | {r['majority_baseline_accuracy']:.4f} |",
+        f"| Modelo publicado | {r['accuracy']:.4f} |",
         "",
-        f"Lift over the baseline: **{r['accuracy_lift_over_baseline']:+.4f}**.",
+        f"Ganho sobre a baseline: **{r['accuracy_lift_over_baseline']:+.4f}**.",
         "",
-        "## Confusion matrix",
+        "## Matriz de confusão",
         "",
-        "| | Predicted 0 | Predicted 1 |",
+        "| | Previsto 0 | Previsto 1 |",
         "|---|---|---|",
-        f"| **Actual 0** | {cm['true_negative']} | {cm['false_positive']} |",
-        f"| **Actual 1** | {cm['false_negative']} | {cm['true_positive']} |",
+        f"| **Real 0** | {cm['true_negative']} | {cm['false_positive']} |",
+        f"| **Real 1** | {cm['false_negative']} | {cm['true_positive']} |",
         "",
-        "## Metrics",
+        "## Métricas",
         "",
-        "| Metric | Value |",
+        "| Métrica | Valor |",
         "|---|---|",
-        f"| Accuracy | {r['accuracy']:.4f} |",
-        f"| Precision | {r['precision']:.4f} |",
+        f"| Acurácia | {r['accuracy']:.4f} |",
+        f"| Precisão | {r['precision']:.4f} |",
         f"| Recall | {r['recall']:.4f} |",
         f"| F1 | {r['f1']:.4f} |",
         f"| ROC-AUC | {r['roc_auc']:.4f} |",
         f"| PR-AUC | {r['pr_auc']:.4f} |",
         f"| Brier score | {r['brier_score']:.4f} |",
         "",
-        "## Calibration (diagnostic)",
+        "## Calibração (diagnóstico)",
         "",
-        "| Score band | Rows | Mean predicted | Observed rate |",
+        "| Faixa de escore | Linhas | Média prevista | Taxa observada |",
         "|---|---|---|---|",
     ]
     for row in r["calibration"]:
@@ -130,9 +130,9 @@ def to_markdown(result: dict) -> str:
 
     lines += [
         "",
-        "## Acceptance",
+        "## Aceitação",
         "",
-        "| Criterion | Threshold | Observed | Result |",
+        "| Critério | Limiar | Observado | Resultado |",
         "|---|---|---|---|",
     ]
     for name, check in accepted["checks"].items():
@@ -142,17 +142,17 @@ def to_markdown(result: dict) -> str:
         )
     lines += [
         "",
-        f"**Overall: {'PASS' if accepted['passed'] else 'FAIL'}**",
+        f"**Resultado geral: {'PASS' if accepted['passed'] else 'FAIL'}**",
         "",
     ]
     check = result["sklearn_cross_check"]
     if check.get("available"):
         lines += [
-            "## Metric cross-check",
+            "## Conferência cruzada das métricas",
             "",
-            f"The lab's own metric implementations agree with scikit-learn "
-            f"(max absolute difference {check['max_absolute_delta']:.2e}): "
-            f"**{'yes' if check['agrees'] else 'no'}**.",
+            f"As implementações de métrica do próprio lab concordam com o scikit-learn "
+            f"(diferença absoluta máxima {check['max_absolute_delta']:.2e}): "
+            f"**{'sim' if check['agrees'] else 'não'}**.",
             "",
         ]
     return "\n".join(lines)
@@ -161,7 +161,7 @@ def to_markdown(result: dict) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", default=os.environ.get("AWS_PROFILE"))
-    parser.add_argument("--endpoint", help="defaults to the endpoint_name Terraform output")
+    parser.add_argument("--endpoint", help="por padrão, o output endpoint_name do Terraform")
     parser.add_argument("--data", type=Path, default=DATA_DIR)
     parser.add_argument("--batch-size", type=int, default=250)
     args = parser.parse_args()
@@ -173,20 +173,20 @@ def main() -> int:
 
         status = aws.describe_endpoint(session, endpoint)["EndpointStatus"]
         if status != "InService":
-            raise aws.AwsError(f"endpoint {endpoint} is {status}, not InService")
+            raise aws.AwsError(f"o endpoint {endpoint} está {status}, não InService")
 
         rows, labels, ids = read_test_set(args.data)
-        log(f"[evaluate] scoring {len(rows)} held-out rows through {endpoint}")
+        log(f"[evaluate] pontuando {len(rows)} linhas separadas através de {endpoint}")
 
         scores: list[float] = []
         batches = 0
         for batch in aws.batched(rows, args.batch_size):
             scores.extend(aws.invoke_endpoint_csv(session, endpoint, "\n".join(batch)))
             batches += 1
-            log(f"[evaluate] batch {batches}: {len(scores)}/{len(rows)} rows scored")
+            log(f"[evaluate] lote {batches}: {len(scores)}/{len(rows)} linhas pontuadas")
 
         if len(scores) != len(rows):
-            raise aws.AwsError(f"{len(scores)} probabilities for {len(rows)} rows")
+            raise aws.AwsError(f"{len(scores)} probabilidades para {len(rows)} linhas")
     except aws.AwsError as exc:
         log(f"[FAIL] {exc}")
         emit({"passed": False, "error": str(exc)})
@@ -236,15 +236,15 @@ def main() -> int:
     )
     (out / "evaluation.md").write_text(to_markdown(result), encoding="utf-8")
 
-    log(f"[evaluate] majority baseline accuracy {report['majority_baseline_accuracy']:.4f}")
-    log(f"[evaluate] accuracy {report['accuracy']:.4f} (lift {report['accuracy_lift_over_baseline']:+.4f})")
-    log(f"[evaluate] precision {report['precision']:.4f} recall {report['recall']:.4f} f1 {report['f1']:.4f}")
+    log(f"[evaluate] acurácia da baseline majoritária {report['majority_baseline_accuracy']:.4f}")
+    log(f"[evaluate] acurácia {report['accuracy']:.4f} (ganho {report['accuracy_lift_over_baseline']:+.4f})")
+    log(f"[evaluate] precisão {report['precision']:.4f} recall {report['recall']:.4f} f1 {report['f1']:.4f}")
     log(f"[evaluate] roc_auc {report['roc_auc']:.4f} pr_auc {report['pr_auc']:.4f}")
     for name, check in checks.items():
         log(f"  [{'PASS' if check['passed'] else 'FAIL'}] {name}: {check['observed']} vs {check['threshold']}")
     if result["sklearn_cross_check"].get("available"):
-        log(f"  [{'PASS' if result['sklearn_cross_check']['agrees'] else 'FAIL'}] metrics agree with scikit-learn")
-    log(f"[evaluate] wrote {out / 'evaluation.json'} and evaluation.md")
+        log(f"  [{'PASS' if result['sklearn_cross_check']['agrees'] else 'FAIL'}] métricas concordam com o scikit-learn")
+    log(f"[evaluate] escrevi {out / 'evaluation.json'} e evaluation.md")
 
     emit(result)
     return 0 if result["passed"] else 1

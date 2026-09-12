@@ -1,9 +1,9 @@
-# Real-time endpoint. This resource DOES wait for InService in provider 6.60.0
-# (waitEndpointInService), so a successful apply here means the capability is
-# actually reachable - unlike the training job resource.
+# Endpoint em tempo real. Este recurso ESPERA pelo InService no provider 6.60.0
+# (waitEndpointInService), então um apply bem-sucedido aqui significa que a
+# capacidade está de fato alcançável - diferente do recurso de training job.
 #
-# This is the only continuously billed resource in the lab. `make destroy` and
-# `make verify-clean` exist because of this line.
+# Este é o único recurso cobrado continuamente no lab. O `make destroy` e o
+# `make verify-clean` existem por causa desta linha.
 resource "aws_sagemaker_endpoint" "churn" {
   count = var.deploy_serving ? 1 : 0
 

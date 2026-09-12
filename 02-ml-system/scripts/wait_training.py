@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Bridge between the training stage and the serving stage.
+"""Ponte entre o estágio de treino e o estágio de serving.
 
-Provider 6.60.0's `aws_sagemaker_training_job` returns as soon as the job is
-InProgress and exports no artifact URI, so a green `terraform apply` says nothing
-about whether a model exists. This script closes that gap:
+O `aws_sagemaker_training_job` do provider 6.60.0 retorna assim que o job entra em
+InProgress e não exporta a URI do artefato, então um `terraform apply` verde não
+diz nada sobre a existência de um modelo. Este script fecha essa lacuna:
 
-1. waits for a terminal training status and surfaces `FailureReason` verbatim;
-2. reads the artifact URI from `DescribeTrainingJob` - the authoritative value,
-   never a path assembled from a naming convention;
-3. proves the object exists and is non-empty with `HeadObject`;
-4. writes `terraform/artifact.auto.tfvars.json` so stage two of `make apply`
-   needs no copy/paste.
+1. espera um status terminal de treino e mostra o `FailureReason` literalmente;
+2. lê a URI do artefato no `DescribeTrainingJob` - o valor autoritativo, nunca um
+   caminho montado a partir de convenção de nome;
+3. prova com `HeadObject` que o objeto existe e não está vazio;
+4. escreve `terraform/artifact.auto.tfvars.json` para o estágio dois do
+   `make apply` não precisar de copiar e colar.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ HANDOFF_FILE = "artifact.auto.tfvars.json"
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", default=os.environ.get("AWS_PROFILE"))
-    parser.add_argument("--job-name", help="defaults to the training_job_name Terraform output")
+    parser.add_argument("--job-name", help="por padrão, o output training_job_name do Terraform")
     parser.add_argument("--timeout", type=int, default=3600)
     parser.add_argument("--poll", type=int, default=20)
     args = parser.parse_args()
@@ -42,45 +42,46 @@ def main() -> int:
         session = aws.make_session(cfg.region, args.profile)
         job_name = args.job_name or aws.require_output(aws.terraform_outputs(), "training_job_name")
 
-        log(f"[wait] waiting for training job {job_name}")
+        log(f"[wait] esperando o training job {job_name}")
         description = aws.wait_training_job(
             session, job_name, poll_seconds=args.poll, timeout_seconds=args.timeout
         )
         status = description["TrainingJobStatus"]
         if status != "Completed":
-            reason = description.get("FailureReason", "(no FailureReason reported)")
-            log(f"[FAIL] training job {job_name} ended as {status}: {reason}")
-            log("[hint] full logs: CloudWatch group /aws/sagemaker/TrainingJobs")
+            reason = description.get("FailureReason", "(nenhum FailureReason reportado)")
+            log(f"[FAIL] o training job {job_name} terminou como {status}: {reason}")
+            log("[dica] logs completos: grupo /aws/sagemaker/TrainingJobs no CloudWatch")
             emit({"passed": False, "training_job_name": job_name, "status": status, "failure_reason": reason})
             return 1
 
         artifact_uri = description.get("ModelArtifacts", {}).get("S3ModelArtifacts", "")
         if not artifact_uri:
             raise aws.AwsError(
-                f"training job {job_name} completed but reported no ModelArtifacts.S3ModelArtifacts"
+                f"o training job {job_name} terminou, mas não reportou ModelArtifacts.S3ModelArtifacts"
             )
 
         bucket, key = aws.split_s3_uri(artifact_uri)
         head = aws.object_exists(session, bucket, key)
         if head is None:
-            raise aws.AwsError(f"artifact {artifact_uri} is not in S3 - refusing to deploy a model")
+            raise aws.AwsError(f"o artefato {artifact_uri} não está no S3 - recusando publicar um modelo")
         if head["content_length"] <= 0:
-            raise aws.AwsError(f"artifact {artifact_uri} is empty - refusing to deploy a model")
+            raise aws.AwsError(f"o artefato {artifact_uri} está vazio - recusando publicar um modelo")
     except aws.AwsError as exc:
         log(f"[FAIL] {exc}")
         emit({"passed": False, "error": str(exc)})
         return 1
 
     handoff = TERRAFORM_DIR / HANDOFF_FILE
-    # `deploy_serving` is persisted here, not passed as `-var`, so that a later
-    # `terraform plan` or `destroy` sees the same stage the state represents.
+    # O `deploy_serving` é persistido aqui, não passado como `-var`, para um
+    # `terraform plan` ou `destroy` posterior ver o mesmo estágio que o state
+    # representa.
     handoff.write_text(
         json.dumps({"deploy_serving": True, "model_artifact_uri": artifact_uri}, indent=2) + "\n",
         encoding="utf-8",
     )
 
-    # Kept for the evidence package: these fields are the proof that training
-    # really ran with the configuration the repository claims.
+    # Guardado para o pacote de evidências: estes campos são a prova de que o
+    # treino rodou de fato com a configuração que o repositório afirma.
     record = {
         "passed": True,
         "training_job_name": job_name,
@@ -122,11 +123,11 @@ def main() -> int:
         json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
-    log(f"[wait] {status} in {record['billable_seconds']}s billable")
+    log(f"[wait] {status} em {record['billable_seconds']}s cobrados")
     for metric in record["final_metrics"]:
-        log(f"[wait] final metric {metric['name']}={metric['value']}")
-    log(f"[wait] artifact {artifact_uri} ({head['content_length']} bytes, verified with HeadObject)")
-    log(f"[wait] wrote {handoff.name} for the serving stage")
+        log(f"[wait] métrica final {metric['name']}={metric['value']}")
+    log(f"[wait] artefato {artifact_uri} ({head['content_length']} bytes, conferido com HeadObject)")
+    log(f"[wait] escrevi {handoff.name} para o estágio de serving")
 
     emit(record)
     return 0

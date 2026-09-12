@@ -1,6 +1,6 @@
 terraform {
-  # Pinned exactly, not with "~>": a classroom where two students resolve
-  # different versions is a classroom debugging Terraform instead of ML systems.
+  # Fixado exatamente, não com "~>": uma sala em que dois alunos resolvem versões
+  # diferentes é uma sala depurando Terraform em vez de sistemas de ML.
   required_version = "= 1.15.8"
 
   required_providers {

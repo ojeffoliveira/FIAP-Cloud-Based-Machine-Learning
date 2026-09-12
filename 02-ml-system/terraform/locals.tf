@@ -1,12 +1,12 @@
-# One random suffix per lifecycle, kept in state.
+# Um sufixo aleatório por ciclo de vida, guardado no state.
 #
-# The bucket name stays deterministic (account ID is already globally unique),
-# but SageMaker refuses to reuse a training job name that exists in history -
-# including a completed job from a previous `make e2e`. Without a per-lifecycle
-# suffix the second run of the lab would fail on ResourceInUse, so the suffix is
-# the minimum non-determinism required for the lab to be repeatable with no
-# manual editing. It is generated once, persisted in state, and only changes
-# after a destroy.
+# O nome do bucket continua determinístico (o ID da conta já é globalmente
+# único), mas o SageMaker recusa reutilizar um nome de training job que exista no
+# histórico - incluindo um job concluído de um `make e2e` anterior. Sem um sufixo
+# por ciclo de vida, a segunda execução do lab falharia com ResourceInUse, então
+# o sufixo é o mínimo de não-determinismo necessário para o lab ser repetível sem
+# edição manual. Ele é gerado uma vez, persistido no state, e só muda depois de
+# um destroy.
 resource "random_id" "lifecycle" {
   byte_length = 4
 }
@@ -34,7 +34,7 @@ locals {
   validation_channel_uri = "s3://${terraform_data.bucket.output}/${local.s3_prefixes.validation}/"
   training_output_uri    = "s3://${terraform_data.bucket.output}/${local.s3_prefixes.output}/"
 
-  # No personal data in tags: they end up in cost reports the whole class shares.
+  # Nenhum dado pessoal nas tags: elas caem em relatórios de custo que a turma toda vê.
   tags = {
     course     = "cloud-based-machine-learning"
     lab        = "lab1-model-to-ml-system"
@@ -42,9 +42,9 @@ locals {
     managed_by = "terraform"
   }
 
-  # Same tag set in the shape the S3 API expects, for the bucket the CLI creates
-  # (see s3.tf) - provider default_tags only reach resources the provider itself
-  # creates.
+  # O mesmo conjunto de tags no formato que a API do S3 espera, para o bucket que
+  # a CLI cria (veja s3.tf) - o default_tags do provider só alcança recursos que o
+  # próprio provider cria.
   bucket_tagging_json = jsonencode({
     TagSet = [for k, v in local.tags : { Key = k, Value = v }]
   })

@@ -1,24 +1,25 @@
-"""Deterministic synthetic dataset for Lab 1.
+"""Dataset sintético determinístico do Lab 02.
 
-Why synthetic: the lesson needs every Academy account to run the *same logical
-experiment*. A downloaded dataset can change or disappear independently of this
-repository; a seeded generator cannot.
+Por que sintético: a aula precisa que toda conta do Academy rode o *mesmo
+experimento lógico*. Um dataset baixado pode mudar ou sair do ar de forma
+independente deste repositório; um gerador com semente fixa não pode.
 
-Determinism contract
---------------------
-Two properties are guaranteed, in this order:
+Contrato de determinismo
+------------------------
+Duas propriedades são garantidas, nesta ordem:
 
-1. Same seed + same numpy version -> identical bytes in every generated file.
-2. Cross-platform stability (arm64 vs x86_64): every feature is rounded to a
-   fixed number of decimals *before* the label is computed and before it is
-   written. Transcendental functions (exp/log inside normal/gamma/poisson) can
-   differ by one ULP between SIMD implementations; rounding to 2 decimals
-   absorbs that, so the CSV bytes stay identical. The label draw uses
-   `rng.random() < p` instead of `rng.binomial`, because `random()` is pure bit
-   manipulation and therefore exact everywhere.
+1. Mesma semente + mesma versão do numpy -> bytes idênticos em todo arquivo
+   gerado.
+2. Estabilidade entre plataformas (arm64 vs x86_64): toda feature é arredondada
+   para um número fixo de decimais *antes* de o rótulo ser calculado e antes de
+   ser escrita. Funções transcendentais (exp/log dentro de normal/gamma/poisson)
+   podem diferir em um ULP entre implementações SIMD; arredondar para 2 decimais
+   absorve isso, então os bytes do CSV continuam idênticos. O sorteio do rótulo
+   usa `rng.random() < p` em vez de `rng.binomial`, porque `random()` é pura
+   manipulação de bits e, portanto, exato em qualquer lugar.
 
-The draw order below is part of the contract: reordering it changes the RNG
-stream and therefore every file hash.
+A ordem dos sorteios abaixo faz parte do contrato: reordenar muda o fluxo do RNG
+e, com isso, o hash de todos os arquivos.
 """
 
 from __future__ import annotations
@@ -43,9 +44,9 @@ from lab1.config import (
     log,
 )
 
-# Coefficients of the data-generating process. They are a transparent logistic
-# model: a reader can predict the direction of every feature's effect without
-# training anything, which is the point in the first class.
+# Coeficientes do processo gerador dos dados. São um modelo logístico
+# transparente: quem lê consegue prever a direção do efeito de cada feature sem
+# treinar nada, e é justamente esse o ponto na primeira aula.
 DGP = {
     "intercept": -0.45,
     "tenure_months": -0.045,
@@ -92,13 +93,13 @@ def _sigmoid(x: np.ndarray) -> np.ndarray:
 
 
 def generate_source(cfg: LabConfig) -> dict[str, np.ndarray]:
-    """Generate the analysis representation, including `observation_id`."""
+    """Gera a representação de análise, incluindo o `observation_id`."""
     rng = np.random.default_rng(cfg.seed)
     n = cfg.rows
 
     observation_id = np.arange(1, n + 1, dtype=np.int64)
 
-    # Draw order is part of the determinism contract - do not reorder.
+    # A ordem dos sorteios faz parte do contrato de determinismo - não reordenar.
     tenure_months = rng.integers(1, 73, size=n).astype(np.int64)
     monthly_charges = np.round(np.clip(rng.normal(110.0, 45.0, size=n), 20.0, 260.0), 2)
     support_calls_90d = np.clip(rng.poisson(1.5, size=n), 0, 30).astype(np.int64)
@@ -133,17 +134,18 @@ def generate_source(cfg: LabConfig) -> dict[str, np.ndarray]:
 
 
 def stratified_split(cfg: LabConfig, source: dict[str, np.ndarray]) -> dict[str, Split]:
-    """Deterministic stratified split, disjoint by construction.
+    """Split estratificado determinístico, disjunto por construção.
 
-    Each class is permuted independently with its own seeded generator, then cut
-    at the configured fractions. Rows are finally ordered by `observation_id` so
-    the file layout does not depend on concatenation order.
+    Cada classe é permutada de forma independente com o próprio gerador semeado e
+    depois cortada nas frações configuradas. No fim as linhas são ordenadas por
+    `observation_id`, para o layout do arquivo não depender da ordem de
+    concatenação.
     """
     labels = source["churn"]
     fractions = cfg.split_fractions
     train_cut, validation_cut = fractions["train"], fractions["train"] + fractions["validation"]
 
-    # Offset seed so the split stream can never coincide with the generator stream.
+    # Semente deslocada para o fluxo do split nunca coincidir com o do gerador.
     rng = np.random.default_rng(cfg.seed + 1)
 
     buckets: dict[str, list[np.ndarray]] = {"train": [], "validation": [], "test": []}
@@ -195,14 +197,14 @@ def sha256_file(path: Path) -> str:
 
 
 def serialize_training_rows(cfg: LabConfig, split: Split) -> list[list[str]]:
-    """Headerless, label first - the built-in XGBoost training contract."""
+    """Sem cabeçalho, rótulo na primeira coluna - o contrato de treino do XGBoost."""
     columns = [cfg.label, *cfg.feature_order]
     values = {cfg.label: split.labels, **split.features}
     return [[_format(c, values[c][i]) for c in columns] for i in range(split.rows)]
 
 
 def serialize_feature_rows(cfg: LabConfig, split: Split) -> list[list[str]]:
-    """Headerless, no label - the inference contract."""
+    """Sem cabeçalho, sem rótulo - o contrato de inferência."""
     return [
         [_format(c, split.features[c][i]) for c in cfg.feature_order]
         for i in range(split.rows)
@@ -210,12 +212,12 @@ def serialize_feature_rows(cfg: LabConfig, split: Split) -> list[list[str]]:
 
 
 def write_dataset(cfg: LabConfig, out_dir: Path) -> dict[str, Any]:
-    """Write source + model-ready files and return the deterministic manifest."""
+    """Escreve o source + os arquivos prontos para o modelo e devolve o manifesto."""
     source = generate_source(cfg)
     splits = stratified_split(cfg, source)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    log(f"[data] seed={cfg.seed} rows={cfg.rows} out={out_dir}")
+    log(f"[data] semente={cfg.seed} linhas={cfg.rows} destino={out_dir}")
 
     source_columns = [cfg.id_column, *cfg.feature_order, cfg.label]
     source_rows = [

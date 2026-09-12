@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Preflight: is this environment allowed to build the lab at all?
+"""Verificação prévia: este ambiente tem permissão para montar o lab?
 
-Checks identity, region and the pre-provisioned execution role before any
-resource is created, because every later failure mode (wrong region, expired
-Academy token, missing LabRole) is far cheaper to diagnose here.
+Confere identidade, região e a role de execução já provisionada antes de qualquer
+recurso ser criado, porque todo modo de falha posterior (região errada, token do
+Academy expirado, LabRole ausente) é muito mais barato de diagnosticar aqui.
 
-Prints a human report to stderr and the machine-readable result to stdout.
+Escreve o relatório legível em stderr e o resultado para máquina em stdout.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from lab1.config import emit, load_config, log
 
 
 def mask_arn(arn: str) -> str:
-    """Keep the shape of the ARN visible while hiding the account digits."""
+    """Mantém o formato do ARN visível e esconde os dígitos da conta."""
     parts = arn.split(":")
     if len(parts) > 4 and parts[4].isdigit() and len(parts[4]) == 12:
         parts[4] = f"{parts[4][:4]}{'*' * 4}{parts[4][-4:]}"
@@ -33,7 +33,7 @@ def mask_arn(arn: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", default=os.environ.get("AWS_PROFILE"))
-    parser.add_argument("--json", action="store_true", help="only the JSON result on stdout")
+    parser.add_argument("--json", action="store_true", help="só o resultado JSON em stdout")
     args = parser.parse_args()
 
     cfg = load_config()
@@ -62,14 +62,14 @@ def main() -> int:
     result["passed"] = all(result["checks"].values())
 
     if not args.json:
-        log("AWS preflight")
-        log(f"  account          : {identity['account_id']}")
-        log(f"  caller           : {mask_arn(identity['arn'])}")
-        log(f"  region           : {session.region_name} (required {cfg.region})")
-        log(f"  execution role   : {mask_arn(role_arn)}")
-        log(f"  lab bucket to use: {result['bucket_name']}")
-        log("  credentials are never printed by this lab")
-        log(f"[{'PASS' if result['passed'] else 'FAIL'}] preflight")
+        log("Verificação prévia da AWS")
+        log(f"  conta            : {identity['account_id']}")
+        log(f"  chamador         : {mask_arn(identity['arn'])}")
+        log(f"  região           : {session.region_name} (exigida {cfg.region})")
+        log(f"  role de execução : {mask_arn(role_arn)}")
+        log(f"  bucket do lab    : {result['bucket_name']}")
+        log("  este lab nunca imprime credencial")
+        log(f"[{'PASS' if result['passed'] else 'FAIL'}] verificação prévia")
 
     emit(result)
     return 0 if result["passed"] else 1

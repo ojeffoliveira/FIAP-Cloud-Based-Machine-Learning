@@ -1,7 +1,7 @@
-"""Paths, constants and log helper shared by every script in the lab.
+"""Caminhos, constantes e o helper de log compartilhados por todos os scripts.
 
-Convention enforced across the whole lab: stdout carries the *result* (data a
-caller may pipe or capture), stderr carries progress and diagnostics.
+Convenção válida para o lab inteiro: stdout carrega o *resultado* (o dado que
+alguém pode pipar ou capturar), stderr carrega progresso e diagnóstico.
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ EVIDENCE_DIR = ARTIFACTS_DIR / "evidence"
 LAB_YAML = CONFIG_DIR / "lab.yaml"
 SCHEMA_JSON = CONFIG_DIR / "schema.json"
 
-# Model-ready file names state their purpose: "model_" means headerless, in
-# feature-contract order, ready to be consumed by SageMaker.
+# O nome do arquivo já declara o propósito: "model_" significa sem cabeçalho, na
+# ordem do contrato de features, pronto para o SageMaker consumir.
 SOURCE_FILE = "source.csv"
 MODEL_TRAIN_FILE = "model_train_headerless.csv"
 MODEL_VALIDATION_FILE = "model_validation_headerless.csv"
@@ -38,12 +38,12 @@ SPLITS = ("train", "validation", "test")
 
 
 def log(*args: Any) -> None:
-    """Progress/diagnostic output. Never stdout, so `cmd | tail` stays clean."""
+    """Progresso/diagnóstico. Nunca em stdout, para `cmd | tail` sair limpo."""
     print(*args, file=sys.stderr, flush=True)
 
 
 def emit(payload: Any) -> None:
-    """The one result a caller might capture, as JSON on stdout."""
+    """O único resultado que alguém pode capturar, como JSON em stdout."""
     print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True))
 
 
