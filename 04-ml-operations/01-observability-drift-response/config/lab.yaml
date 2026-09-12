@@ -1,0 +1,124 @@
+# Fonte única de verdade para o lado Python do Lab 04.1.
+#
+# As constantes do lado Terraform (URI da imagem, tipos de instância,
+# hiperparâmetros, limiar do alarme) vivem em terraform/variables.tf, para a IaC
+# continuar legível por si só. O que os DOIS lados precisam conhecer — prefixo do
+# bucket, namespace das métricas, nome das features — está espelhado à mão aqui e
+# lá; não existe verificação automática entre os dois arquivos.
+
+schema_version: "1.0.0"
+
+region: us-east-1
+
+aws:
+  execution_role_name: LabRole
+  bucket_prefix: prb-cloud-ml-lab3
+
+# O Lab 04.1 não inventa um caso novo: ele opera a mesma capacidade de churn que
+# o Lab 02 construiu. Estes três campos entram no manifesto do dataset e na
+# evidência, para a linhagem ser conferível e não só afirmada na aula.
+lineage:
+  source_lab: "02-ml-system"
+  business_capability: "bora-fibra-churn"
+  model_lineage: "churn-v1"
+
+# Contrato herdado do 02-ml-system/config/lab.yaml. Seed, volume, rótulo,
+# identificador e ordem das features são idênticos de propósito: drift só é
+# interpretável se a feature tiver o mesmo significado que tinha no treino.
+dataset:
+  seed: 20260817
+  rows: 4000
+  label: churn
+  id_column: observation_id
+  feature_order:
+    - tenure_months
+    - monthly_charges
+    - support_calls_90d
+    - payment_delay_days
+    - usage_score
+    - annual_contract
+    - premium_plan
+  split:
+    train: 0.70
+    validation: 0.15
+    test: 0.15
+  # As duas janelas de produção que só existem neste lab: o que chegou ao
+  # endpoint depois do go-live. Mesmo schema e mesma ordem de features do treino.
+  production_windows:
+    baseline_rows: 200
+    shifted_rows: 200
+
+# Limites de contrato, não parâmetros do gerador. Um valor fora deles significa
+# que o gerador ou o arquivo saiu do lugar. Iguais aos do Lab 02.
+bounds:
+  tenure_months: [1, 72]
+  monthly_charges: [20.0, 260.0]
+  support_calls_90d: [0, 30]
+  payment_delay_days: [0.0, 45.0]
+  usage_score: [5.0, 100.0]
+  annual_contract: [0, 1]
+  premium_plan: [0, 1]
+
+prevalence_range: [0.20, 0.50]
+
+min_rows_per_split: 400
+
+drift:
+  # Bins calculados SÓ na referência (quantis) e reaplicados na janela observada.
+  # Recalcular os bins na janela observada esconderia justamente o deslocamento
+  # que se quer medir.
+  #
+  # Quintis, não decis: o PSI de uma janela SEM drift não é zero, é ruído de
+  # amostragem da ordem de (bins-1)/n. Com 200 linhas por janela, decil deixa esse
+  # piso em ~0.045 e picos acima de 0.10 acontecem — ou seja, a janela saudável
+  # acusaria drift. Quintil derruba o piso para ~0.02 e mantém a leitura estável.
+  bins: 5
+  # Piso para bin vazio. Sem ele, uma categoria que desapareceu na janela
+  # observada levaria o PSI a infinito e a métrica pararia de ser comparável.
+  epsilon: 1.0e-6
+  # As três features que o dashboard mostra em widget próprio. As sete são
+  # publicadas; estas são as que a narrativa da Bora Fibra explica.
+  monitored_features:
+    - monthly_charges
+    - support_calls_90d
+    - usage_score
+  # Faixas de calibração, cobertas por tests/test_drift.py. NÃO são os valores que
+  # o README publica: o README publica o que a execução mediu.
+  #
+  # Só existem PISOS e TETOS aqui, nunca banda estreita. O PSI dos dados é
+  # determinístico (depende só do dataset, que tem seed fixa) e poderia ser
+  # cravado; o PSI das predições e o F1 dependem do modelo treinado na nuvem, que
+  # varia um pouco entre execuções. Uma banda apertada derivada de uma única
+  # amostra reprovaria a próxima execução correta.
+  design:
+    baseline_psi_max_below: 0.10
+    baseline_prediction_psi_below: 0.10
+    shifted_psi_max_at_least: 0.30
+    shifted_features_above_threshold_at_least: 2
+    shifted_prediction_psi_at_least: 0.20
+    quality_drop_at_least: 0.15
+
+monitoring:
+  namespace: FIAP/ML/Operations
+  # O alarme observa 1 datapoint de 60 s: a aula não pode esperar 15 minutos de
+  # janela estatística. O preço é sensibilidade a um único ponto — aceitável aqui
+  # e explicado no README.
+  alarm_threshold: 0.20
+  alarm_period_s: 60
+  # Quanto o `make alarm-status` espera a transição OK -> ALARM. CloudWatch
+  # costuma convergir bem antes disso; o teto existe para o comando falhar com
+  # mensagem clara em vez de pendurar.
+  alarm_wait_timeout_s: 480
+  reaction_wait_timeout_s: 300
+
+inference:
+  # Lotes pequenos: 200 linhas por janela cabem em poucas chamadas e mantêm o
+  # gráfico de Invocations legível no dashboard.
+  batch_rows: 25
+
+acceptance:
+  decision_threshold: 0.5
+  # Piso de sanidade do modelo recém-treinado, medido na referência. Não é a
+  # faixa de desenho do drift: é o "o modelo treinou de verdade?".
+  reference_roc_auc_min: 0.75
+  reference_f1_min: 0.50

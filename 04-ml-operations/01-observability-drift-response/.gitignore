@@ -1,0 +1,32 @@
+# Credencial nunca entra neste repositório.
+.env
+.env.*
+.aws/
+*.pem
+*.ppk
+
+# O state do Terraform descreve infraestrutura viva e pode conter valor sensível.
+terraform.tfstate
+terraform.tfstate.*
+.terraform/
+terraform.tfvars
+crash.log
+crash.*.log
+
+# Arquivo de passagem de bastão, escrito por scripts/lab.py no `make apply`.
+terraform/artifact.auto.tfvars.json
+
+# Pacote da Lambda: gerado no apply, fora da árvore do repositório.
+build/
+*.zip
+
+# Tudo que é gerado em tempo de execução.
+artifacts/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.mypy_cache/
+.ruff_cache/
