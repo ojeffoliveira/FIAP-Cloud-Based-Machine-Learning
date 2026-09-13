@@ -32,11 +32,11 @@ resource "aws_vpc_security_group_egress_rule" "https" {
   # aceita só o charset a-zA-Z0-9. _-:/()#,@[]+=&;{}!$* (sem acento, sem
   # aspas, menos de 256 chars) — o texto original em PT-BR acentuado violava
   # isso e o apply falhava com InvalidParameterValue. Reescrito sem acentos.
-  description       = "HTTPS apenas (decisao D8). Mirrors do apt exigem porta 80, mas a solucao e evitar apt-get: user-data baixa cada dependencia via HTTPS oficial com checksum/assinatura verificados. Ver templates/user_data.sh.tftpl."
-  ip_protocol       = "tcp"
-  from_port         = 443
-  to_port           = 443
-  cidr_ipv4         = "0.0.0.0/0"
+  description = "HTTPS apenas (decisao D8). Mirrors do apt exigem porta 80, mas a solucao e evitar apt-get: user-data baixa cada dependencia via HTTPS oficial com checksum/assinatura verificados. Ver templates/user_data.sh.tftpl."
+  ip_protocol = "tcp"
+  from_port   = 443
+  to_port     = 443
+  cidr_ipv4   = "0.0.0.0/0"
 }
 
 resource "aws_instance" "runner" {
