@@ -1,0 +1,123 @@
+# Fonte única de verdade do lado Python/Terraform do Lab 04.2.
+#
+# Continua a mesma disciplina do 04.1: nenhum script ou módulo .tf hardcoda um
+# valor que também precisa existir aqui. O que muda de lab para lab é o
+# CONTEÚDO deste arquivo, nunca o hábito de consultá-lo.
+#
+# Marcadores `<<A2>>`: valor que só pode ser CONGELADO depois de o preflight de
+# runtime (resolve_runtime.py, dono: A2) medir de verdade contra o DLC e o
+# endpoint reais. Até lá, o valor aqui é o TETO de projeto (o que o README e o
+# Terraform assumem por padrão), não uma medição. Substituir um `<<A2>>` por um
+# número sem ter rodado o preflight é inventar dado — proibido pelo contrato do
+# lab.
+
+schema_version: "1.0.0"
+
+region: us-east-1
+
+aws:
+  execution_role_name: LabRole
+  instance_profile_name: LabInstanceProfile
+  # Todo nome de recurso do lab começa por este prefixo. Nenhum script ou .tf
+  # pode hardcodear um nome de recurso fora de prefixo+sufixo.
+  bucket_prefix: fiap-cbml-42
+
+# Regra do sufixo determinístico (blueprint §1): nunca nome de aluno.
+#
+#   suffix = sha256(f"{account_id}:{github_owner}")[:8]   (hex, minúsculo)
+#
+# `account_id` vem de sts.get_caller_identity() (aws.account_id()).
+# `github_owner` é resolvido em ordem, e falha explícita (LabError) se nenhuma
+# fonte existir — nunca cai para nome de aluno como último recurso:
+#   1. env GITHUB_REPOSITORY_OWNER (presente nos runners do GitHub Actions);
+#   2. `git config --get remote.origin.url` do próprio checkout, parseado;
+naming:
+  suffix_algorithm: "sha256(account_id + ':' + github_owner)[:8]"
+  # Todos os placeholders abaixo são resolvidos em tempo de execução por
+  # src/lab42/aws.py (suffix(), account_id()) — nenhum script os reescreve à
+  # mão. `<account>` = account id de 12 dígitos; `<hash8>` = suffix; `<suffix>`
+  # é o mesmo valor de `<hash8>`, repetido aqui porque a spec usa os dois nomes
+  # em contextos diferentes (bucket vs. recurso de negócio).
+  bucket_state: "fiap-cbml-42-tfstate-<account>-<hash8>"
+  bucket_state_key: "04-2/slm/terraform.tfstate"
+  bucket_artifacts: "fiap-cbml-42-models-<account>-<hash8>"
+  endpoint_v1: "fiap-cbml-42-slm-v1-<suffix>"
+  endpoint_v2: "fiap-cbml-42-slm-v2-<suffix>"
+  dashboard: "fiap-mlops-slm-<suffix>"
+
+# O 04.2 não reescreve o churn-v1: ele consome o score que o 04.1 já produz e
+# adiciona uma capacidade nova (recomendação em texto). A linhagem do SLM é
+# registrada separada da linhagem do modelo de churn, para as duas serem
+# auditáveis de forma independente (ex.: destruir o SLM não apaga a linhagem
+# do churn, e vice-versa).
+lineage:
+  source_lab: "04.1-observability-drift-response"
+  business_capability: "bora-fibra-retention-copilot"
+  model_lineage: "bora-retention-slm"
+  upstream_model_lineage: "churn-v1"
+
+# Runner self-hosted efêmero (terraform/runner, dono: A5). Vive só durante a
+# janela do deploy V2; nunca fica de pé fora da aula (guardrail de custo).
+runner:
+  instance_type: t3.medium
+  ebs_gb: 30
+  ebs_volume_type: gp3
+  ami_os: ubuntu-22.04-lts-x86_64
+  github_actions_label: academy-slm-deploy
+  security_group:
+    inbound: []
+    outbound_tcp: [443]
+  imds:
+    http_endpoint: enabled
+    http_tokens: required
+    http_put_response_hop_limit: 1
+
+# SageMaker (terraform/slm, dono: A6). ml.m5.xlarge é o baseline aprovado nos
+# guardrails do Academy para CPU inference com o DLC llama.cpp — nunca GPU.
+sagemaker:
+  instance_type: ml.m5.xlarge
+  v1:
+    fixed_capacity: 1
+  v2:
+    autoscaling:
+      min_capacity: 1
+      max_capacity: 2
+      target_metric: SageMakerVariantInvocationsPerInstance
+      # <<A2>>: o alvo de invocations/instância só é calibrado depois do
+      # benchmark real (make benchmark-v1); um chute aqui dispararia
+      # autoscaling no primeiro smoke test ou nunca dispararia.
+      target_value: <<A2>>
+      # <<A2>>: cooldown de scale-out curto porém seguro, medido; scale-in
+      # maior que scale-out por design (evita oscilação), mas o valor exato
+      # dos dois só é fixado depois do preflight.
+      scale_out_cooldown_s: <<A2>>
+      scale_in_cooldown_s: <<A2>>
+
+# Parâmetros de inferência do SLM (dono do runtime: A2/A8). Nenhum destes é um
+# chute de conforto — cada `<<A2>>` é preenchido pelo preflight de
+# resolve_runtime.py contra o DLC e o endpoint reais, nunca por analogia com o
+# limite teórico do modelo.
+inference:
+  # <<A2>>: 1024 ou 2048, decidido pelo preflight (o modelo suporta muito mais,
+  # mas o lab não usa contexto grande só porque o modelo aceita).
+  max_context_tokens: <<A2>>
+  # <<A2>>: teto de projeto é 64; o preflight confirma que é suficiente para o
+  # contrato de saída de 2-3 frases em português.
+  max_output_tokens: <<A2>>
+  # Temperatura 0 é decisão de design (reprodutibilidade de smoke/eval), não de
+  # medição — não carrega marcador.
+  temperature: 0.0
+  # <<A2>>: envelope de latência (p50/p95 aceitáveis) só existe depois do
+  # benchmark real; ver 09_IMPLEMENTATION_BLUEPRINT.md §14 e §7 da spec.
+  latency_envelope_ms:
+    p50_max: <<A2>>
+    p95_max: <<A2>>
+
+# Tags propagadas em todo recurso AWS do lab (SageMaker, S3, EC2, CloudWatch),
+# amarrando por API a origem e a capacidade de negócio — o mesmo mecanismo do
+# 04.1, sem reinventar chave de tag nova.
+tags:
+  lab: "04-2-slm-sagemaker"
+  business_capability: "bora-fibra-retention-copilot"
+  model_lineage: "bora-retention-slm"
+  managed_by: terraform

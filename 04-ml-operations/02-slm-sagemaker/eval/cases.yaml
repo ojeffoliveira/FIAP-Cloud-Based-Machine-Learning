@@ -1,0 +1,204 @@
+# Casos sintéticos do gate generativo do SLM de retenção da Bora Fibra.
+#
+# Nenhum campo abaixo é dado real de cliente: schema e valores seguem o
+# exemplo do §8 da spec (probabilidade_churn, faixa_tempo_cliente, plano,
+# uso, chamados_90d, atraso_pagamento) — os mesmos seis campos que o modelo
+# de churn (04.1) já calcula, nunca nome/CPF/telefone/e-mail/endereço.
+#
+# `checks.deve_mencionar_algum` é satisfeito com QUALQUER UM dos termos (não
+# todos) — é um piso de relevância semântica, não um exact-match; um SLM de
+# 0,5B parâmetros varia de frase para frase, então o gate tem que aceitar
+# qualquer termo plausível para a mesma ideia (ex.: "contato" ou "ligação").
+# `checks.nao_deve_inventar` é o oposto: a resposta REPROVA se citar qualquer
+# um destes termos, porque nenhum deles está no contexto enviado ao modelo
+# (ver src/lab42/evaluation.py:check_nao_inventou).
+#
+# Os 8 casos cobrem situações distintas de negócio, não variações cosméticas
+# do mesmo caso: risco alto por queda de uso, risco alto por volume de
+# chamados, risco médio por atraso de pagamento, risco baixo (ação
+# proporcional, sem alarme), cliente recente vs. cliente antigo, e mais de
+# um plano.
+
+- id: caso_01
+  contexto:
+    probabilidade_churn: 0.87
+    faixa_tempo_cliente: 24-36 meses
+    plano: fibra_500
+    uso: queda_acentuada_30d
+    chamados_90d: 1
+    atraso_pagamento: baixo
+  checks:
+    idioma: pt-BR
+    deve_mencionar_algum:
+      - contato
+      - suporte
+      - atendimento
+      - conexão
+      - internet
+    nao_deve_inventar:
+      - CPF
+      - telefone
+      - endereço
+      - e-mail
+      - valor de desconto específico
+
+- id: caso_02
+  contexto:
+    probabilidade_churn: 0.81
+    faixa_tempo_cliente: 6-12 meses
+    plano: fibra_300
+    uso: estavel
+    chamados_90d: 6
+    atraso_pagamento: baixo
+  checks:
+    idioma: pt-BR
+    deve_mencionar_algum:
+      - chamado
+      - suporte
+      - atendimento
+      - contato
+      - prioridade
+    nao_deve_inventar:
+      - CPF
+      - telefone
+      - endereço
+      - e-mail
+      - valor de desconto específico
+
+- id: caso_03
+  contexto:
+    probabilidade_churn: 0.52
+    faixa_tempo_cliente: 36-48 meses
+    plano: fibra_500
+    uso: estavel
+    chamados_90d: 1
+    atraso_pagamento: alto
+  checks:
+    idioma: pt-BR
+    deve_mencionar_algum:
+      - pagamento
+      - fatura
+      - contato
+      - atraso
+      - cobrança
+    nao_deve_inventar:
+      - CPF
+      - telefone
+      - endereço
+      - e-mail
+      - valor de desconto específico
+
+- id: caso_04
+  contexto:
+    probabilidade_churn: 0.14
+    faixa_tempo_cliente: 48-60 meses
+    plano: fibra_1000
+    uso: estavel
+    chamados_90d: 0
+    atraso_pagamento: baixo
+  checks:
+    idioma: pt-BR
+    deve_mencionar_algum:
+      - monitorar
+      - acompanhar
+      - manter
+      - estável
+      - nenhuma
+    nao_deve_inventar:
+      - CPF
+      - telefone
+      - endereço
+      - e-mail
+      - valor de desconto específico
+
+- id: caso_05
+  contexto:
+    probabilidade_churn: 0.91
+    faixa_tempo_cliente: 0-6 meses
+    plano: fibra_300
+    uso: queda_acentuada_30d
+    chamados_90d: 5
+    atraso_pagamento: medio
+  checks:
+    idioma: pt-BR
+    deve_mencionar_algum:
+      - contato
+      - suporte
+      - atendimento
+      - urgência
+      - prioridade
+    nao_deve_inventar:
+      - CPF
+      - telefone
+      - endereço
+      - e-mail
+      - valor de desconto específico
+
+- id: caso_06
+  contexto:
+    probabilidade_churn: 0.47
+    faixa_tempo_cliente: 12-24 meses
+    plano: combo_tv_fibra
+    uso: queda_leve_30d
+    chamados_90d: 2
+    atraso_pagamento: medio
+  checks:
+    idioma: pt-BR
+    deve_mencionar_algum:
+      - contato
+      - suporte
+      - acompanhar
+      - atendimento
+      - pagamento
+    nao_deve_inventar:
+      - CPF
+      - telefone
+      - endereço
+      - e-mail
+      - valor de desconto específico
+
+- id: caso_07
+  contexto:
+    probabilidade_churn: 0.21
+    faixa_tempo_cliente: 12-24 meses
+    plano: fibra_500
+    uso: aumento_30d
+    chamados_90d: 0
+    atraso_pagamento: baixo
+  checks:
+    idioma: pt-BR
+    deve_mencionar_algum:
+      - monitorar
+      - acompanhar
+      - manter
+      - estável
+      - nenhuma
+    nao_deve_inventar:
+      - CPF
+      - telefone
+      - endereço
+      - e-mail
+      - valor de desconto específico
+
+- id: caso_08
+  contexto:
+    probabilidade_churn: 0.88
+    faixa_tempo_cliente: 60+ meses
+    plano: fibra_1000
+    uso: queda_acentuada_30d
+    chamados_90d: 7
+    atraso_pagamento: alto
+  checks:
+    idioma: pt-BR
+    deve_mencionar_algum:
+      - contato
+      - suporte
+      - atendimento
+      - prioridade
+      - urgência
+    nao_deve_inventar:
+      - CPF
+      - telefone
+      - endereço
+      - e-mail
+      - valor de desconto específico

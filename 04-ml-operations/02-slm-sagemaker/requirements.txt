@@ -1,0 +1,18 @@
+# Versões exatas, fixadas para a execução de todo aluno resolver o mesmo grafo.
+# PyYAML/boto3/botocore no mesmo pino do Lab 04.1, para as duas turmas de labs
+# não resolverem árvores de dependência diferentes num mesmo Codespaces.
+boto3==1.43.93
+botocore==1.43.93
+PyYAML==6.0.3
+
+# SDK oficial: única forma documentada de resolver a URI+tag do DLC
+# huggingface-llamacpp via `image_uris.retrieve` (blueprint §5) sem hardcodear
+# a URI da conta de imagens da AWS à mão.
+sagemaker==3.21.0
+
+# Download do manifest/GGUF do Hugging Face Hub e chamadas HTTP de
+# invoke/smoke/benchmark ao endpoint (quando o contrato exposto pelo DLC for
+# OpenAI-compatible via HTTP em vez de boto3 puro).
+requests==2.34.2
+
+pytest==9.1.1

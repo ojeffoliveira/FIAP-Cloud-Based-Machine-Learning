@@ -1,0 +1,82 @@
+# Manifest de release do SLM de retenção da Bora Fibra — V1 (release manual).
+#
+# Fonte de verdade para o release. `scripts/model_sync.py` lê este arquivo,
+# resolve a URL exata por revisão, baixa, calcula SHA-256 em streaming e falha
+# duro em qualquer mismatch — nunca confia em HTTPS como garantia de
+# integridade (ver /tmp/cloud-code-lab04-2-a7/riscos-supply-chain.md).
+# `tests/test_release_manifest.py` valida este contrato estaticamente; este
+# arquivo precisa continuar passando nele.
+#
+# V1 é o release manual (Codespaces, credencial temporária do Academy). V2
+# (model/releases/v2.yaml) troca só a quantização e o release; o prompt
+# contract fica idêntico nas duas para isolar "artefato/serving" como a única
+# variável quando `make compare` cruzar V1 x V2.
+
+schema_version: "1.0.0"
+
+release: v1
+
+# Procedência real, provada por dois métodos independentes (git ls-remote e
+# HfApi().repo_info()) e reconfirmada pelo probe do A2 (runtime.json) — nunca
+# copiada às cegas da spec. A revisão é o commit completo do Hub, nunca
+# `main`: `main` pode avançar entre a preparação da aula e a execução em
+# sala, e um `sha256` calculado contra um arquivo que já mudou reprovaria o
+# lab sem motivo pedagógico.
+model:
+  source: huggingface
+  repo: Qwen/Qwen2.5-0.5B-Instruct-GGUF
+  revision: 9217f5db79a29953eb74d5343926648285ec7e67
+  filename: qwen2.5-0.5b-instruct-q4_0.gguf
+  # SHA-256 confirmado em três fontes independentes e concordantes: valor
+  # publicado na spec, metadata LFS retornada pelo Hub (HfApi) e download real
+  # verificado pelo A2 (runtime.json) com `shasum -a 256` local.
+  sha256: 7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed
+  size_bytes: 428730208
+  quantization: Q4_0
+  license: Apache-2.0
+
+# Layout D7 (decisão de integração, 21:29): um prefixo por release, contendo
+# exatamente um `.gguf`. O A2 provou que `ModelDataSource` com
+# `S3DataType=S3Prefix` sincroniza o PREFIXO INTEIRO para /opt/ml/model — o
+# layout antigo (models/<repo>/<revision>/<arquivo>) colocaria Q4_0 e Q4_K_M
+# no mesmo prefixo, o container baixaria os dois (~920 MB) e as releases
+# perderiam isolamento. Por isso o release entra no caminho, não só no nome
+# do arquivo.
+storage:
+  s3_key_pattern: "models/Qwen2.5-0.5B-Instruct-GGUF/<revision>/<release>/<filename>"
+  s3_prefix_pattern: "models/Qwen2.5-0.5B-Instruct-GGUF/<revision>/<release>/"
+  metadata_json: metadata/v1.json
+
+# Container/engine confirmado pelo preflight real do A2 em us-east-1
+# (CreateModel + CreateEndpoint InService na primeira tentativa — ver
+# /tmp/cloud-code-lab04-2-a2/runtime.json e decisão D1 do coordenador).
+inference_engine: huggingface-llamacpp
+container:
+  uri: 763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-llamacpp:b9522-cpu-ubuntu24.04
+  tag: b9522-cpu-ubuntu24.04
+  digest: sha256:519fc50eecccf716f537d6e78b756086aca4c69da89c571838feca5ea5e45c33
+
+# Instância validada pelo preflight real do A2 (D1/D10: PASS na primeira
+# tentativa, InService, sem OOM). Decisão registrada em
+# 01_RESEARCH_FINDINGS_AND_DECISIONS.md §3: margem de CPU/RAM mais previsível
+# para uma demonstração coletiva em CPU.
+instance_type: ml.m5.xlarge
+
+# Contexto e output curtos de propósito didático (não é limite do modelo, que
+# suporta até 128K conforme runtime.json n_ctx_train_model) — o objetivo é
+# mostrar serving em CPU dentro do budget do Academy, não maximizar contexto.
+# 2048 é o valor que o A2 já validou no probe real (LLAMA_ARG_CTX_SIZE=2048,
+# "n_ctx = 2048" confirmado em log).
+max_context: 2048
+max_output_tokens: 64
+
+# Temperature 0 é obrigatório para smoke test e evaluation set determinísticos
+# (02_SPEC_LAB04_2_SLM_CICD.md §7) — sem isso o gate de evaluation não é
+# reproduzível entre execuções.
+temperature: 0.0
+
+# V1 e V2 compartilham a mesma versão de prompt contract de propósito: isso
+# isola quantização/artefato/pipeline como a única variável quando o
+# `make compare` cruzar V1 x V2. Bump este valor só quando
+# prompts/retention-system.txt mudar de contrato de saída.
+prompt_contract_version: "1.0.0"

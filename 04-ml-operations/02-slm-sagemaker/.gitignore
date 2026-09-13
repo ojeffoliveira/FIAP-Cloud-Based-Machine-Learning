@@ -1,0 +1,45 @@
+# Credencial nunca entra neste repositório.
+.env
+.env.*
+.aws/
+*.pem
+*.ppk
+
+# Backend/config gerado localmente (sufixo, account id) — nunca versionado,
+# recalculado a cada `make backend`/`make doctor`.
+.generated/
+
+# State dos dois stacks Terraform (runner e slm) descreve infraestrutura viva
+# e pode conter valor sensível.
+terraform.tfstate
+terraform.tfstate.*
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfplan
+terraform.tfvars
+crash.log
+crash.*.log
+
+# Tudo que é gerado em tempo de execução (evidence, dataset, predições).
+artifacts/
+
+# O GGUF nunca é versionado — baixado do Hugging Face Hub e sincronizado
+# direto para o S3, nunca passa por `artifacts/` nem pelo git. Pesos em
+# safetensors (formato intermediário de alguns releases no HF) têm a mesma
+# regra: nunca no git.
+*.gguf
+*.safetensors
+*.tar.gz
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.bandit/
+.scannerwork/
+
+.DS_Store

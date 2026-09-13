@@ -1,0 +1,157 @@
+name: 04.2 - Quality gate (SLM CI/CD)
+
+# Gate de qualidade do Lab 04.2. Roda inteiramente em runner GitHub-hosted,
+# sem qualquer acesso à AWS — a credencial e o deploy real do SLM V2 vivem
+# em 04-2-deploy-v2.yml, disparado manualmente pelo owner num runner
+# self-hosted separado. Este workflow só valida código, infraestrutura como
+# código e a própria política de segurança do lab (ver
+# tests/test_workflow_policy.py).
+
+on:
+  pull_request:
+    paths:
+      - "04-ml-operations/02-slm-sagemaker/**"
+      - ".github/workflows/04-2-*.yml"
+  push:
+    branches:
+      - master
+    paths:
+      - "04-ml-operations/02-slm-sagemaker/**"
+      - ".github/workflows/04-2-*.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 04-2-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Qualidade, segurança e validação de infraestrutura do Lab 04.2
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: 04-ml-operations/02-slm-sagemaker
+    steps:
+      - name: Fazer checkout do repositório sem persistir credenciais
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Criar venv de lint/segurança e instalar requirements-ci.txt
+        # Venv isolado do venv de testes (abaixo): requirements-ci.txt fixa
+        # checkov==3.3.17, que por sua vez fixa boto3==1.35.49 de forma
+        # exata — incompatível, em qualquer combinação, com o boto3>=1.43
+        # que requirements.txt exige (sagemaker-core). Instalar as duas
+        # árvores no mesmo ambiente falha a resolução do pip; por isso cada
+        # árvore vive no seu próprio venv, replicando localmente o mesmo
+        # motivo documentado no cabeçalho de requirements-ci.txt.
+        run: |
+          set -euo pipefail
+          python -m venv .venv-ci
+          .venv-ci/bin/pip install --upgrade pip
+          .venv-ci/bin/pip install -r requirements-ci.txt
+
+      - name: Criar venv de testes e instalar requirements.txt
+        # pytest fica em requirements.txt (não em requirements-ci.txt) porque
+        # a suíte em tests/ roda contra o boto3/PyYAML reais do lab, não
+        # contra o boto3 fixado pelo checkov — mesma separação de árvores do
+        # passo anterior.
+        run: |
+          set -euo pipefail
+          python -m venv .venv-test
+          .venv-test/bin/pip install --upgrade pip
+          .venv-test/bin/pip install -r requirements.txt
+
+      - name: Verificar que nenhum binário de modelo está rastreado pelo git
+        # Defesa dedicada e barata (git ls-files), independente do pytest,
+        # para o caso de a suíte de testes falhar em importar antes de
+        # chegar a este risco específico (GGUF/tarball nunca versionado).
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '\.(gguf|tar\.gz|safetensors)$'; then
+            echo "FALHA: binário de modelo rastreado pelo git" >&2
+            exit 1
+          fi
+          echo "OK: nenhum binário de modelo rastreado pelo git"
+
+      - name: Lint com Ruff
+        run: .venv-ci/bin/ruff check .
+
+      - name: Verificar formatação com Ruff
+        run: .venv-ci/bin/ruff format --check .
+
+      - name: Rodar suíte de testes (pytest)
+        # Cobre, entre outras coisas, a política de segurança dos workflows
+        # (tests/test_workflow_policy.py), o contrato dos manifests de
+        # release (tests/test_release_manifest.py), a ausência de segredos
+        # e de binário de modelo (tests/test_no_secrets.py) e o contrato do
+        # evaluation set (tests/test_evaluation_contract.py).
+        env:
+          PYTHONPATH: src
+        run: .venv-test/bin/pytest -v
+
+      - name: Análise estática de segurança com Bandit
+        run: .venv-ci/bin/bandit -r src scripts
+
+      - name: Auditoria de dependências Python com pip-audit
+        # Lê os dois arquivos de requirements como texto (modo -r do
+        # pip-audit não exige que os pacotes estejam instalados no venv
+        # corrente), então não reabre o conflito de árvores do passo de
+        # instalação acima.
+        run: .venv-ci/bin/pip-audit -r requirements.txt -r requirements-ci.txt
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Verificar formatação Terraform (fmt -check)
+        run: terraform fmt -check -recursive terraform
+
+      - name: Validar stack Terraform do runner (init sem backend + validate)
+        working-directory: 04-ml-operations/02-slm-sagemaker/terraform/runner
+        run: |
+          set -euo pipefail
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validar stack Terraform do SLM (init sem backend + validate)
+        working-directory: 04-ml-operations/02-slm-sagemaker/terraform/slm
+        run: |
+          set -euo pipefail
+          terraform init -backend=false
+          terraform validate
+
+      - name: Escanear infraestrutura como código com Checkov (stack runner)
+        run: .venv-ci/bin/checkov -d terraform/runner --compact --quiet
+
+      - name: Escanear infraestrutura como código com Checkov (stack SLM)
+        run: .venv-ci/bin/checkov -d terraform/slm --compact --quiet
+
+      - name: Analisar scripts shell com ShellCheck
+        run: |
+          set -euo pipefail
+          find scripts -type f -name "*.sh" -print0 \
+            | xargs -0 --no-run-if-empty shellcheck
+
+      - name: Baixar e verificar o binário do gitleaks (release pinada + checksum)
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+
+      - name: Escanear segredos no código do lab com gitleaks
+        run: /tmp/gitleaks detect --source . --no-git -v

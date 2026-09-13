@@ -1,0 +1,59 @@
+# Manifest de release do SLM de retenção da Bora Fibra — V2 (release pelo
+# pipeline).
+#
+# Mesma leitura/validação de model/releases/v1.yaml via `scripts/model_sync.py`
+# (não duplicar lógica: o script é parametrizado por `--release`).
+#
+# Única diferença intencional de V1 para V2: quantização (Q4_0 → Q4_K_M) e o
+# release. Prompt contract idêntico — ver comentário em v1.yaml. V2 é o
+# release entregue pelo workflow `04-2-deploy-v2.yml` via runner self-hosted
+# efêmero com LabInstanceProfile (nenhuma access key AWS entra no GitHub).
+
+schema_version: "1.0.0"
+
+release: v2
+
+# Mesmo repo/revisão de V1 — a garantia de reprodutibilidade é a mesma
+# revisão imutável do Hub para as duas releases, só o arquivo (quantização)
+# muda.
+model:
+  source: huggingface
+  repo: Qwen/Qwen2.5-0.5B-Instruct-GGUF
+  revision: 9217f5db79a29953eb74d5343926648285ec7e67
+  filename: qwen2.5-0.5b-instruct-q4_k_m.gguf
+  # Confirmado em três fontes independentes e concordantes: valor publicado
+  # na spec, lfs.sha256 retornado pela API do Hub
+  # (HfApi().repo_info(files_metadata=True)) e SHA-256 calculado localmente
+  # pelo A7 após download real do arquivo (491.400.032 bytes). O probe do A2
+  # (runtime.json) confirmou este SHA apenas via metadata LFS do Hub, sem
+  # download real — por isso `scripts/model_sync.py` faz o download real e a
+  # verificação por streaming sempre que processa v2, e não confia só no
+  # metadata do Hub.
+  sha256: 74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db
+  size_bytes: 491400032
+  quantization: Q4_K_M
+  license: Apache-2.0
+
+# Layout D7 — ver comentário completo em v1.yaml. O prefixo de V2 nunca
+# compartilha diretório com o de V1: cada um tem exatamente um `.gguf`.
+storage:
+  s3_key_pattern: "models/Qwen2.5-0.5B-Instruct-GGUF/<revision>/<release>/<filename>"
+  s3_prefix_pattern: "models/Qwen2.5-0.5B-Instruct-GGUF/<revision>/<release>/"
+  metadata_json: metadata/v2.json
+
+# Mesmo runtime de V1 de propósito: a comparação V1 x V2 deve isolar o efeito
+# da quantização do artefato, não do engine/container.
+inference_engine: huggingface-llamacpp
+container:
+  uri: 763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-llamacpp:b9522-cpu-ubuntu24.04
+  tag: b9522-cpu-ubuntu24.04
+  digest: sha256:519fc50eecccf716f537d6e78b756086aca4c69da89c571838feca5ea5e45c33
+
+instance_type: ml.m5.xlarge
+
+max_context: 2048
+max_output_tokens: 64
+temperature: 0.0
+
+# Idêntico a V1 — ver comentário em v1.yaml sobre por que isso é proposital.
+prompt_contract_version: "1.0.0"

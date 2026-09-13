@@ -1,0 +1,194 @@
+#!/bin/bash
+# user-data do runner self-hosted do GitHub Actions (Lab 04.2).
+#
+# Roda uma vez no boot via cloud-init. NÃO registra o runner no GitHub — isso é
+# ação humana via scripts/register_runner.sh, executado depois, dentro de uma
+# sessão SSM Session Manager, porque o token de registro é de curta duração e
+# nunca deve passar por aqui (nem em user-data, nem em variável Terraform, nem
+# em log). Ver 01_RESEARCH_FINDINGS_AND_DECISIONS.md §9 e spec-register-runner.md.
+#
+# Idempotente por construção: cada etapa checa se o resultado já existe antes
+# de repetir trabalho, então um re-run do cloud-init (ou uma depuração manual
+# rodando este script de novo) não duplica nem corrompe nada.
+#
+# Decisão D8 (coordenador): o security group deste runner só abre egress 443,
+# nunca 80. O agente A3 provou (runner-provado.md) que os mirrors padrão do
+# apt (*.ec2.archive.ubuntu.com, security.ubuntu.com) só servem HTTP — a
+# resposta a isso não é abrir porta por conveniência, é este script nunca
+# chamar apt-get. Medição real feita pelo próprio agente A5 (probe ad-hoc
+# i-08ebb6d63f2a6ad3c, egress 443-only, mesma AMI, destruído logo depois de
+# medir) na mesma AMI Canonical usada aqui, mostrou que:
+#   - git, gnupg (gpg) e ca-certificates já vêm de fábrica (dpkg -l "ii").
+#   - libicu70, libssl3, libkrb5 e zlib1g (as libs nativas que o runtime do
+#     runner do GitHub Actions precisa) também já vêm de fábrica — confirmado
+#     via `ldconfig -p`. Por isso este script NUNCA chama
+#     ./bin/installdependencies.sh (o instalador oficial do pacote do runner,
+#     que por padrão roda apt-get e falharia sem a porta 80).
+#   - unzip e jq NÃO vêm de fábrica. unzip é substituído por
+#     `python3 -m zipfile` (python3 já vem de fábrica). jq vem como binário
+#     estático oficial, com checksum conferido, exatamente como Terraform e o
+#     runner do GitHub Actions.
+#   - python3-venv (pacote apt) também não vem de fábrica — o módulo `venv`
+#     em si funciona sem ele (`python3 -m venv --without-pip`, confirmado no
+#     probe); só o bootstrap do pip é que precisaria do pacote apt. Como este
+#     user-data não precisa de pip em venv nenhuma, não bootstramos pip aqui —
+#     documentado como limitação conhecida caso um script futuro precise.
+
+set -o errexit -o pipefail
+exec > >(tee -a /var/log/user-data.log) 2>&1
+echo "=== user-data iniciado: $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+
+# ---------------------------------------------------------------------------
+# 1. SSM Agent
+# ---------------------------------------------------------------------------
+# A AMI Canonical 22.04 já entrega o snap amazon-ssm-agent ativo de fábrica —
+# provado pelo agente A3 na conta Academy real (Online no
+# describe-instance-information em menos de 3min10s, sem nenhum user-data).
+# Este bloco só existe como rede de segurança caso uma atualização futura da
+# AMI mude esse comportamento.
+if ! snap services amazon-ssm-agent 2>/dev/null | grep -q "active"; then
+  echo "SSM Agent não está ativo via snap; instalando/iniciando."
+  snap install amazon-ssm-agent --classic || true
+  snap start amazon-ssm-agent || true
+fi
+
+# ---------------------------------------------------------------------------
+# 2. jq — único binário sem alternativa nativa na AMI, via download oficial
+#    com checksum SHA-256 (egress 443, sem apt)
+# ---------------------------------------------------------------------------
+jq_version="${jq_version}"
+jq_sha256="${jq_linux_amd64_sha256}"
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "Instalando jq $${jq_version}."
+  curl -fsSL -o /usr/local/bin/jq \
+    "https://github.com/jqlang/jq/releases/download/jq-$${jq_version}/jq-linux-amd64"
+  echo "$${jq_sha256}  /usr/local/bin/jq" | sha256sum -c -
+  chmod 0755 /usr/local/bin/jq
+else
+  echo "jq já presente, pulando."
+fi
+
+# ---------------------------------------------------------------------------
+# 3. AWS CLI v2 — download oficial + verificação de assinatura GPG
+# ---------------------------------------------------------------------------
+# gnupg já vem de fábrica na AMI (confirmado no probe), então não precisamos
+# instalar nada para ter o binário `gpg` disponível aqui.
+#
+# A AWS não publica um SHA-256 estático para o bundle "current" da CLI v2 (ele
+# muda a cada patch, sem versão fixa na URL). O guia oficial de instalação da
+# AWS recomenda verificar a assinatura GPG do .sig em vez de um checksum
+# solto — é o mecanismo de integridade que a própria AWS mantém para este
+# artefato específico.
+if ! command -v aws >/dev/null 2>&1; then
+  echo "Instalando AWS CLI v2."
+  workdir_cli=$(mktemp -d)
+  cd "$workdir_cli"
+
+  curl -fsSL -o awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+  curl -fsSL -o awscliv2.zip.sig "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip.sig"
+
+  cat > aws_pubkey.asc <<'AWS_CLI_GPG_PUBLIC_KEY'
+${aws_cli_gpg_public_key}
+AWS_CLI_GPG_PUBLIC_KEY
+
+  export GNUPGHOME
+  GNUPGHOME=$(mktemp -d)
+  gpg --batch --import aws_pubkey.asc
+  gpg --batch --list-keys "${aws_cli_gpg_key_fingerprint}" >/dev/null
+
+  gpg --batch --verify awscliv2.zip.sig awscliv2.zip
+
+  # unzip não vem de fábrica na AMI e não instalamos via apt (egress 443-only);
+  # python3 (esse sim de fábrica) resolve sem dependência nova.
+  python3 -m zipfile -e awscliv2.zip .
+  ./aws/install
+
+  cd /
+  rm -rf "$workdir_cli" "$GNUPGHOME"
+  unset GNUPGHOME
+else
+  echo "AWS CLI já instalada, pulando."
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Terraform pinado — download oficial + checksum SHA-256
+# ---------------------------------------------------------------------------
+# Mesma versão do required_version deste stack (terraform/runner/versions.tf):
+# o runner precisa falar a mesma versão de Terraform que o Codespaces fala com
+# terraform/slm/, senão o `terraform plan` do pipeline V2 pode divergir por
+# motivo nenhum ligado à mudança real de infraestrutura.
+terraform_version="${terraform_version}"
+terraform_sha256="${terraform_linux_amd64_sha256}"
+
+if ! (command -v terraform >/dev/null 2>&1 && terraform version | head -1 | grep -q "v$${terraform_version}"); then
+  echo "Instalando Terraform $${terraform_version}."
+  workdir_tf=$(mktemp -d)
+  cd "$workdir_tf"
+
+  curl -fsSL -o terraform.zip \
+    "https://releases.hashicorp.com/terraform/$${terraform_version}/terraform_$${terraform_version}_linux_amd64.zip"
+  echo "$${terraform_sha256}  terraform.zip" | sha256sum -c -
+
+  python3 -m zipfile -e terraform.zip .
+  install -m 0755 terraform /usr/local/bin/terraform
+
+  cd /
+  rm -rf "$workdir_tf"
+else
+  echo "Terraform $${terraform_version} já instalado, pulando."
+fi
+
+# ---------------------------------------------------------------------------
+# 5. GitHub Actions runner — download pinado + checksum, SEM registrar
+# ---------------------------------------------------------------------------
+runner_version="${runner_version}"
+runner_sha256="${runner_linux_x64_sha256}"
+runner_dir=/opt/actions-runner
+runner_user=actions-runner
+
+if ! id -u "$runner_user" >/dev/null 2>&1; then
+  # Usuário de sistema dedicado: o config.sh oficial do runner recusa correr
+  # como root (a menos que RUNNER_ALLOW_RUNASROOT=1, que preferimos não usar —
+  # rodar sem privilégio de root é a postura correta mesmo numa instância
+  # efêmera de uso único). scripts/register_runner.sh assume esse usuário.
+  useradd --system --create-home --shell /usr/sbin/nologin "$runner_user"
+fi
+
+if [ ! -f "$runner_dir/.provisionado" ]; then
+  echo "Instalando GitHub Actions runner $${runner_version} em $runner_dir."
+  mkdir -p "$runner_dir"
+  cd "$runner_dir"
+
+  curl -fsSL -o runner.tar.gz \
+    "https://github.com/actions/runner/releases/download/v$${runner_version}/actions-runner-linux-x64-$${runner_version}.tar.gz"
+  echo "$${runner_sha256}  runner.tar.gz" | sha256sum -c -
+
+  tar xzf runner.tar.gz
+  rm runner.tar.gz
+
+  # NÃO chamamos ./bin/installdependencies.sh de propósito: esse script
+  # oficial do pacote do runner roda apt-get, que falha sem egress 80 (decisão
+  # D8). Medição real do agente A5 (probe i-08ebb6d63f2a6ad3c, mesma AMI,
+  # egress 443-only) confirmou via `ldconfig -p` que libicu70, libssl3,
+  # libkrb5 e zlib1g — as libs nativas que o runtime do runner (.NET) precisa
+  # para executar — já vêm de fábrica nesta AMI. A única lib que
+  # installdependencies.sh instalaria e que falta é liblttng-ust (tracing de
+  # diagnóstico do .NET, opcional: sua ausência gera no máximo um aviso no
+  # log do runner, nunca impede o processo de rodar). Ver runner-handoff.md
+  # para o comando usado nessa medição, caso uma versão futura do runner
+  # passe a exigir uma lib que não esteja aqui.
+  chown -R "$runner_user":"$runner_user" "$runner_dir"
+
+  # Marcador que scripts/runner_status.py e scripts/register_runner.sh checam
+  # antes de seguir — prova de que o provisionamento terminou, sem depender de
+  # inferir isso lendo /var/log/user-data.log.
+  date -u +%Y-%m-%dT%H:%M:%SZ > "$runner_dir/.provisionado"
+  chown "$runner_user":"$runner_user" "$runner_dir/.provisionado"
+else
+  echo "GitHub Actions runner já provisionado, pulando."
+fi
+
+echo "=== user-data concluído: $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+echo "Runner instalado em $runner_dir, AINDA NÃO REGISTRADO."
+echo "Registro é manual: scripts/register_runner.sh, executado via SSM Session Manager."

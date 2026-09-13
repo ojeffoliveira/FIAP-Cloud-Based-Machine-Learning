@@ -1,0 +1,22 @@
+# Dependências do gate de qualidade do CI (lint + segurança), instaladas em um
+# venv PRÓPRIO — nunca junto de requirements.txt no mesmo ambiente.
+#
+# Motivo, verificado na prática (não é escolha de estilo): checkov 3.3.17 fixa
+# boto3==1.35.49 de forma exata (pin próprio da ferramenta, não um mínimo), e
+# o lab precisa de boto3 >= 1.43 (exigido por sagemaker-core, dependência do
+# pacote `sagemaker` em requirements.txt). As duas árvores de dependência não
+# resolvem juntas em nenhuma combinação de versão — só coexistem em venvs
+# separados. Por isso este arquivo NÃO repete boto3/botocore/PyYAML/requests
+# de requirements.txt: pip-audit lê requirements.txt como arquivo (não precisa
+# dele instalado) e ruff/bandit/checkov não tocam nosso código em tempo de
+# import, só leem o texto/AST.
+#
+# `pytest` fica em requirements.txt, não aqui: os testes importam `src/lab42/`
+# e precisam do boto3 real do lab, não do boto3 que o checkov arrasta.
+ruff==0.16.7
+bandit==1.9.4
+pip-audit==2.10.1
+
+# checkov via pip é decisão do A4 (gitleaks fica por binário+checksum, fora
+# deste arquivo) — não duplicar o mecanismo de instalação dele aqui.
+checkov==3.3.17

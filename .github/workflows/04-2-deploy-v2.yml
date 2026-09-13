@@ -1,0 +1,238 @@
+name: 04.2 - Deploy V2 (SLM CI/CD, runner efemero)
+
+# Disparo manual e deliberado do deploy real do SLM V2 no Academy. Roda em
+# dois jobs: "quality" repete o gate minimo (sem AWS) num runner GitHub-hosted
+# como trava rapida antes de tocar o runner self-hosted; "deploy" roda no
+# runner self-hosted efemero (terraform/runner, dono A5) e faz o trabalho real
+# contra a AWS, sempre por instance profile via IMDS — nunca por secret do
+# GitHub. Ver .github/workflows/04-2-quality.yml para o gate completo (lint,
+# checkov, gitleaks etc.) que roda em todo push/PR, e
+# tests/test_workflow_policy.py para a politica de seguranca testada contra
+# este arquivo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release a implantar (unica opcao suportada nesta trilha)"
+        required: true
+        type: choice
+        options:
+          - v2
+      confirm:
+        description: 'Digite exatamente DEPLOY_V2 para confirmar o deploy real na AWS'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Group fixo (nao baseado em run_id): um deploy V2 em andamento bloqueia
+  # outro disparo concorrente em vez de deixar dois applies pisarem no mesmo
+  # state. Nunca cancela o deploy em andamento.
+  group: deploy-v2-slm
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    name: Gate minimo de qualidade (sem AWS) antes do deploy real
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: 04-ml-operations/02-slm-sagemaker
+    steps:
+      - name: Fazer checkout do repositorio sem persistir credenciais
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Criar venv de lint e instalar requirements-ci.txt
+        # Mesma separacao de arvores do 04-2-quality.yml: requirements-ci.txt
+        # fixa checkov==3.3.17 -> boto3==1.35.49, incompativel com o
+        # boto3>=1.43 que requirements.txt exige. Nunca instalar as duas
+        # arvores no mesmo venv.
+        run: |
+          set -euo pipefail
+          python -m venv .venv-ci
+          .venv-ci/bin/pip install --upgrade pip
+          .venv-ci/bin/pip install -r requirements-ci.txt
+
+      - name: Criar venv de testes e instalar requirements.txt
+        run: |
+          set -euo pipefail
+          python -m venv .venv-test
+          .venv-test/bin/pip install --upgrade pip
+          .venv-test/bin/pip install -r requirements.txt
+
+      - name: Verificar que nenhum binario de modelo esta rastreado pelo git
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '\.(gguf|tar\.gz|safetensors)$'; then
+            echo "FALHA: binario de modelo rastreado pelo git" >&2
+            exit 1
+          fi
+          echo "OK: nenhum binario de modelo rastreado pelo git"
+
+      - name: Lint com Ruff
+        run: .venv-ci/bin/ruff check .
+
+      - name: Verificar formatacao com Ruff
+        run: .venv-ci/bin/ruff format --check .
+
+      - name: Rodar suite de testes (pytest)
+        env:
+          PYTHONPATH: src
+        run: .venv-test/bin/pytest -v
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: Verificar formatacao Terraform (fmt -check)
+        run: terraform fmt -check -recursive terraform
+
+      - name: Validar stack Terraform do runner (init sem backend + validate)
+        # Mesma abordagem do 04-2-quality.yml: nenhum wrapper extra de
+        # timeout aqui, o timeout-minutes do job e o unico limite.
+        working-directory: 04-ml-operations/02-slm-sagemaker/terraform/runner
+        run: |
+          set -euo pipefail
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validar stack Terraform do SLM (init sem backend + validate)
+        working-directory: 04-ml-operations/02-slm-sagemaker/terraform/slm
+        run: |
+          set -euo pipefail
+          terraform init -backend=false
+          terraform validate
+
+  deploy:
+    name: Deploy real do SLM V2 (runner self-hosted efemero, IMDS/instance profile)
+    needs: quality
+    runs-on: [self-hosted, linux, x64, academy-slm-deploy]
+    timeout-minutes: 90
+    # Hard gate: as tres condicoes precisam estar na mesma expressao booleana.
+    # Sem isso, qualquer PR/fork nao autorizado ou disparo fora do master
+    # nunca chega a tocar a AWS real.
+    if: >-
+      github.actor == github.repository_owner &&
+      github.ref == 'refs/heads/master' &&
+      inputs.confirm == 'DEPLOY_V2'
+    defaults:
+      run:
+        working-directory: 04-ml-operations/02-slm-sagemaker
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Fazer checkout do commit exato do dispatch, sem persistir credenciais
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Garantir que nenhuma credencial AWS estatica esta presente no ambiente do runner
+        # Checagem barata e imediata, antes mesmo do preflight em Python: se
+        # alguem colou uma credencial estatica no ambiente do runner
+        # (variavel de ambiente, nao IMDS), falha aqui, sem seguir adiante.
+        run: |
+          set -euo pipefail
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE AWS_DEFAULT_PROFILE 2>/dev/null || true
+          for var in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE AWS_DEFAULT_PROFILE; do
+            if [ -n "${!var:-}" ]; then
+              echo "FALHA: variavel $var esta definida no ambiente do runner" >&2
+              exit 1
+            fi
+          done
+          echo "OK: nenhuma credencial AWS estatica presente no ambiente do runner"
+
+      - name: Provar que a credencial vem de instance profile via IMDS (pipeline-preflight)
+        # Contrato completo em make pipeline-preflight: falha se
+        # AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_SESSION_TOKEN estiverem
+        # setadas, consulta STS e so aceita credential method "iam-role".
+        # Nunca imprime credencial vinda do IMDS.
+        run: make pipeline-preflight
+
+      - name: Gerar backend determinístico e inicializar terraform/slm
+        # make backend cria o bucket de state (terraform_data+local-exec, via
+        # bootstrap_backend.py, derivado de account id + owner) e inicializa
+        # terraform/slm — sem secret, sem copiar/colar suffix.
+        run: make backend
+
+      - name: Baixar e verificar o modelo V2 (revisao pinada, SHA-256 conferido)
+        # make model-v2 baixa da revisao HuggingFace pinada, quantiza Q4_K_M,
+        # verifica o SHA-256 do artefato e sincroniza para o prefixo .../v2/.
+        run: make model-v2
+
+      - name: Planejar o endpoint V2 em terraform/slm (sem tocar a V1)
+        # O Makefile so nomeia a trilha V1 (plan-v1/deploy-v1); a trilha V2 do
+        # endpoint usa a mesma convencao (terraform -chdir=terraform/slm com
+        # -var release=v2), so que direto, pois o Makefile reserva os alvos
+        # runner-plan/runner-apply para a infra do runner, nao do endpoint.
+        run: terraform -chdir=terraform/slm plan -input=false -var release=v2 -out=tfplan-v2
+
+      - name: Aplicar o endpoint V2 em terraform/slm (V1 permanece intacta)
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/slm apply -input=false -auto-approve tfplan-v2
+          terraform -chdir=terraform/slm output
+
+      - name: Aguardar o endpoint V2 atingir o estado InService (consulta por API)
+        run: |
+          set -euo pipefail
+          for tentativa in $(seq 1 30); do
+            status_json=$(.venv/bin/python scripts/runtime_status.py --release v2)
+            estado=$(printf '%s' "$status_json" | .venv/bin/python -c 'import json,sys; print(json.load(sys.stdin).get("EndpointStatus", ""))')
+            echo "tentativa ${tentativa}/30: EndpointStatus=${estado}" >&2
+            if [ "$estado" = "InService" ]; then
+              printf '%s\n' "$status_json"
+              exit 0
+            fi
+            if [ "$estado" = "Failed" ]; then
+              echo "FALHA: endpoint V2 caiu em estado Failed" >&2
+              exit 1
+            fi
+            sleep 30
+          done
+          echo "FALHA: endpoint V2 nao atingiu InService dentro do tempo limite" >&2
+          exit 1
+
+      - name: Rodar os casos de fumaca contra o endpoint V2
+        run: .venv/bin/python scripts/invoke.py --release v2 --smoke
+
+      - name: Rodar a avaliacao generativa contra o V2 (nunca exact-match)
+        run: .venv/bin/python scripts/evaluate.py --release v2
+
+      - name: Medir latencia/throughput real do V2 (benchmark curto)
+        run: .venv/bin/python scripts/benchmark.py --release v2
+
+      - name: Validar autoscaling do V2 por API (scalable target e policy)
+        run: make autoscaling-status
+
+      - name: Comparar V1 x V2 e gravar a recomendacao de release
+        # make compare (evaluate.py --compare) decide a release recomendada
+        # e grava releases/recommended.json no bucket de artifacts.
+        run: make compare
+
+      - name: Consolidar o dossie de evidencia do deploy V2
+        run: make evidence
+
+      - name: Publicar evidencia do deploy V2 como artifact (nunca o binario do modelo)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evidence-deploy-v2
+          path: 04-ml-operations/02-slm-sagemaker/artifacts/evidence/
+          if-no-files-found: warn
+
+      - name: Limpar artefatos locais do runner efemero
+        if: always()
+        run: make clean
