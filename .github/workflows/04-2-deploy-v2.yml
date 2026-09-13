@@ -80,11 +80,15 @@ jobs:
           fi
           echo "OK: nenhum binario de modelo rastreado pelo git"
 
+      # Escopo explícito nos diretórios do lab, como o bandit já faz. Um `.` aqui
+      # varreria também `.venv-ci/` e `.venv-test/`, que o ruff não exclui por
+      # padrão (ele só ignora `.venv`), e o lint reprovaria por dependências de
+      # terceiros arrastadas pelo checkov, como networkx e matplotlib.
       - name: Lint com Ruff
-        run: .venv-ci/bin/ruff check .
+        run: .venv-ci/bin/ruff check src scripts tests
 
       - name: Verificar formatacao com Ruff
-        run: .venv-ci/bin/ruff format --check .
+        run: .venv-ci/bin/ruff format --check src scripts tests
 
       - name: Rodar suite de testes (pytest)
         env:
