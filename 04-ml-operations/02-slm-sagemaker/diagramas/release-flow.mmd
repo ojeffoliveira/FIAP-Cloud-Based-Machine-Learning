@@ -1,0 +1,43 @@
+flowchart TD
+    commit["Commit / push no GitHub repository"]
+    quality["Quality gate<br/>(GitHub-hosted runner: lint, testes, SAST, terraform validate)"]
+    dispatch["Aprovacao manual<br/>(workflow_dispatch pelo owner, branch master, confirm=DEPLOY_V2)"]
+    deploy["Deploy self-hosted<br/>(EC2 runner: baixa HF pinned, verifica SHA-256, sincroniza S3, terraform apply)"]
+
+    subgraph candidatura["V2 candidata em teste — V1 nao e tocada"]
+        candidato["Endpoint SageMaker V2 candidato<br/>(InService, ainda sem trafego de producao)"]
+        smoke["Smoke tests<br/>(protocolo HTTP, schema, UTF-8, tamanho)"]
+        evaluation["Evaluation generativa<br/>(eval/cases.yaml: PT-BR, sem PII, sem valor inventado)"]
+        benchmark["Benchmark curto<br/>(p50/p95, tokens/s)"]
+        candidato --> smoke
+        smoke -- "gate passou" --> evaluation
+        evaluation -- "gate passou" --> benchmark
+    end
+
+    v1["Endpoint SageMaker V1<br/>(producao — continua InService, atendendo 100% do trafego durante todo o teste da V2)"]
+    recomendada["Release recomendada<br/>(releases/recommended.json no S3 — so gravado apos todos os gates)"]
+    mantem["FAIL em qualquer gate: mantem V1<br/>(V2 candidata e descartada, V1 nunca e interrompida)"]
+
+    commit --> quality
+    quality -- "gate passou" --> dispatch
+    quality -- "FAIL" --> mantem
+    dispatch -- "confirmado" --> deploy
+    deploy -- "gate passou" --> candidato
+    deploy -- "FAIL" --> mantem
+    smoke -- "FAIL" --> mantem
+    evaluation -- "FAIL" --> mantem
+    benchmark -- "gate passou" --> recomendada
+    benchmark -- "FAIL" --> mantem
+    deploy -. "V1 nao e tocada pelo deploy da V2; segue InService" .-> v1
+    v1 -. "candidate-before-promotion: so apos passar TODOS os gates a operacao decide promover trafego para V2" .-> recomendada
+
+    classDef release fill:#eef6ff,stroke:#495057,stroke-width:1px,color:#1e1e1e
+    classDef falha fill:#fdeceb,stroke:#d13212,stroke-width:2px,color:#7a1f10
+    classDef producao fill:#fff8e1,stroke:#495057,stroke-width:2px,color:#1e1e1e
+
+    class commit,quality,dispatch,deploy,candidato,smoke,evaluation,benchmark,recomendada release
+    class mantem falha
+    class v1 producao
+
+    linkStyle 5,8,9,10,12 stroke:#d13212,stroke-width:2px,color:#d13212
+    linkStyle 13,14 stroke:#495057,stroke-width:1.5px

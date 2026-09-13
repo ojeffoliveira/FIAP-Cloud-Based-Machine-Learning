@@ -1,0 +1,37 @@
+flowchart TD
+    subgraph naoconfiavel["Zona nao confiavel: PR de fork"]
+        pr["PR de fork<br/>(repositorio externo)"]
+        ghhosted["GitHub-hosted runner<br/>(ubuntu-latest: lint, testes, SAST — sem qualquer credencial AWS)"]
+        pr --> ghhosted
+    end
+
+    subgraph confiavel["Zona confiavel: dispatch manual pelo owner"]
+        dispatch["workflow_dispatch<br/>(owner, branch master, confirm=DEPLOY_V2)"]
+        selfhosted["EC2 self-hosted runner efemero<br/>(processa exatamente 1 job e se desregistra)"]
+        imds["IMDSv2<br/>(token de sessao da instancia, sem chave estatica)"]
+        labrole["LabInstanceProfile / LabRole<br/>(credencial temporaria assumida pela EC2)"]
+        aws["AWS<br/>(SageMaker, S3, CloudWatch)"]
+        dispatch -- "aciona" --> selfhosted
+        selfhosted -- "solicita credencial via" --> imds
+        imds -- "assume" --> labrole
+        labrole -- "autoriza chamada" --> aws
+    end
+
+    secrets["GitHub Secrets do repositorio<br/>NAO existe access key da AWS aqui"]
+    prova["Comprovado na execucao real:<br/>GET /actions/runners apos o job encerrar -> total_count = 0<br/>(runner efemero ja se desregistrou)"]
+
+    ghhosted -. "bloqueado: PR de fork nunca alcanca self-hosted/AWS" .-x selfhosted
+    secrets -. "nenhuma AWS access key sai do GitHub; credencial vem so de IMDSv2 -> LabInstanceProfile/LabRole" .-x aws
+    selfhosted -. "apos concluir o job" .-> prova
+
+    classDef zonaNaoConfiavel fill:#fdeceb,stroke:#d13212,color:#7a1f10
+    classDef zonaConfiavel fill:#eef6ff,stroke:#495057,color:#1e1e1e
+    classDef credencial fill:#fff4e5,stroke:#495057,stroke-width:2px,color:#1e1e1e
+    classDef bloqueado fill:#f5f5f5,stroke:#d13212,stroke-width:1px,color:#7a1f10,stroke-dasharray:4 3
+    classDef prova fill:#eef6ff,stroke:#495057,stroke-width:1px,color:#1e1e1e,stroke-dasharray:3 3
+
+    class pr,ghhosted zonaNaoConfiavel
+    class dispatch,selfhosted,aws zonaConfiavel
+    class imds,labrole credencial
+    class secrets bloqueado
+    class prova prova
