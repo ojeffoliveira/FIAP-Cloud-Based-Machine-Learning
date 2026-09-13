@@ -26,13 +26,25 @@ BINARY_EXTENSIONS = (".gguf", ".tar.gz", ".safetensors")
 # de ferramenta, ou (no caso de .git) já cobertos pelo próprio git ls-files.
 SKIP_DIR_NAMES = {
     ".git",
-    ".venv",
     "__pycache__",
     ".pytest_cache",
     ".ruff_cache",
     ".terraform",
     "node_modules",
 }
+
+
+def _e_virtualenv(nome: str) -> bool:
+    """Qualquer virtualenv, não só `.venv`.
+
+    O CI cria `.venv-ci` e `.venv-test` (árvores separadas por causa do conflito
+    entre checkov e boto3), e dependências de terceiros lá dentro disparam falso
+    positivo: binários em `dateutil/zoneinfo`, strings de credencial em
+    `botocore/data` e nomes como AWS_SECRET_ACCESS_KEY em `botocore/credentials`.
+    Casar por prefixo evita ter que listar nome de venv um a um.
+    """
+    return nome.startswith((".venv", "venv"))
+
 
 # AKIA = access key de longo prazo; ASIA = access key temporária (STS) —
 # as duas nunca deveriam aparecer em texto neste lab, que só usa
@@ -82,7 +94,7 @@ def _iter_text_files():
     for path in LAB_ROOT.rglob("*"):
         if not path.is_file():
             continue
-        if any(parte in SKIP_DIR_NAMES for parte in path.parts):
+        if any(parte in SKIP_DIR_NAMES or _e_virtualenv(parte) for parte in path.parts):
             continue
         if path.suffix in {".gguf", ".tar.gz", ".safetensors", ".png", ".svg", ".pdf"}:
             continue
@@ -123,7 +135,10 @@ def test_no_binary_extensions_in_working_tree():
         str(p.relative_to(LAB_ROOT))
         for ext in BINARY_EXTENSIONS
         for p in LAB_ROOT.rglob(f"*{ext}")
-        if not any(parte in SKIP_DIR_NAMES for parte in p.relative_to(LAB_ROOT).parts)
+        if not any(
+            parte in SKIP_DIR_NAMES or _e_virtualenv(parte)
+            for parte in p.relative_to(LAB_ROOT).parts
+        )
     ]
     assert not offending, (
         "Binário de modelo presente na árvore de trabalho do lab (não "
