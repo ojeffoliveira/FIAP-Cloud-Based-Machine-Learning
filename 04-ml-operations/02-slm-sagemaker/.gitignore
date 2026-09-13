@@ -46,3 +46,9 @@ __pycache__/
 .scannerwork/
 
 .DS_Store
+
+# A regra `*Icon*` do .gitignore da raiz existe para o arquivo de recurso
+# `Icon\r` do macOS, mas com core.ignorecase=true ela casa com o diretório
+# `icones/` inteiro — sem esta negação escopada os ícones oficiais da AWS
+# usados no diagrama de arquitetura nunca entram no versionamento.
+!diagramas/icones/
