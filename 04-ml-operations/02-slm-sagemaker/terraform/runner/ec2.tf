@@ -44,11 +44,13 @@ resource "aws_instance" "runner" {
   # NAT Gateway e VPC endpoint (custo/complexidade fora do escopo didático), e a subnet
   # default não tem outra rota de saída para a internet; sem IP público a instância não
   # alcança GitHub/HashiCorp/AWS pela IGW e o user-data trava.
-  #checkov:skip=CKV_AWS_46:falso positivo, mesma natureza do finding do gitleaks em
-  # locals.tf — o user_data só carrega checksums SHA-256 e a chave pública GPG da AWS
-  # (decisão D8), dados públicos usados para verificar assinatura/integridade de
-  # download, nunca um segredo. O token de registro do runner nunca passa por aqui —
-  # é digitado interativamente em scripts/register_runner.sh, na própria instância.
+  #checkov:skip=CKV_AWS_46:falso positivo, mesma natureza do finding do gitleaks logo
+  # abaixo (aws_cli_gpg_key_fingerprint) — o user_data só carrega checksums SHA-256, a
+  # chave pública GPG da AWS (decisão D8) e o NOME (nunca o valor) do parâmetro SSM do
+  # token de registro (decisão D44). Nome de parâmetro não é segredo. O valor do token
+  # nunca passa por aqui nem por nenhum outro arquivo .tf deste stack — só a instância,
+  # via AWS CLI dentro do próprio user-data, lê e apaga o valor; o Terraform nunca
+  # declara `data "aws_ssm_parameter"` para este nome (isso vazaria o valor no state).
   #checkov:skip=CKV_AWS_126:monitoramento detalhado (granularidade de 1 min) é custo
   # extra sem valor pedagógico para um runner efêmero de CI de laboratório; a métrica
   # padrão de 5 min já é suficiente para depurar o user-data via SSM/CloudWatch Logs.

@@ -44,3 +44,25 @@ output "github_runners_url" {
   description = "Página do GitHub para confirmar o status Idle/Online do runner depois do registro."
   value       = local.github_runners_url
 }
+
+# --------------------------------------------------------------------------- #
+# Registro automático via SSM Parameter Store (decisão D44). O NOME do
+# parâmetro não é segredo — só o valor é, e o valor nunca passa por aqui
+# (nenhum output ou data source deste stack lê o valor). Rode
+# `make runner-token` antes de `make runner-apply` para gravar o valor.
+# --------------------------------------------------------------------------- #
+
+output "runner_token_ssm_parameter" {
+  description = "Nome do parâmetro SecureString que `make runner-token` grava e o user-data lê/apaga no boot. Nunca o valor."
+  value       = var.runner_token_ssm_parameter
+}
+
+output "runner_token_ssm_check_command" {
+  description = <<-EOT
+    Comando pronto para confirmar SE o parâmetro existe e qual o TIPO dele
+    (SecureString), sem nunca revelar o valor. Antes do registro automático:
+    "SecureString". Depois do registro automático bem-sucedido: o comando
+    falha com ParameterNotFound — o parâmetro foi apagado de propósito.
+  EOT
+  value       = "aws ssm get-parameter --name ${var.runner_token_ssm_parameter} --query 'Parameter.Type' --output text"
+}

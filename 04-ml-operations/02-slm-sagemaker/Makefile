@@ -4,8 +4,9 @@
 #   V1 (manual, Codespaces)  -> setup -> doctor -> preflight -> backend ->
 #     model-v1 -> plan-v1 -> deploy-v1 -> status-v1 -> smoke-v1 ->
 #     benchmark-v1 -> quality
-#   V2 (pipeline, runner efemero) -> runner-plan -> runner-apply ->
-#     runner-register-help -> (push dispara .github/workflows/04-2-deploy-v2.yml
+#   V2 (pipeline, runner efemero) -> runner-token -> runner-plan -> runner-apply ->
+#     (registro automatico no boot, decisao D44; runner-register-help mostra o
+#     fallback manual) -> (push dispara .github/workflows/04-2-deploy-v2.yml
 #     no runner self-hosted, sem chave AWS estatica no GitHub) -> compare
 # Fechamento: evidence -> destroy-models -> runner-destroy -> destroy-all ->
 # verify-clean. `make e2e` roda o que e 100% Codespaces (V1 + infra + qualidade
@@ -21,13 +22,21 @@ SCRIPTS := scripts
 ARTIFACTS ?= artifacts
 GENERATED ?= .generated
 
+# Precisa ficar igual ao default de var.runner_token_ssm_parameter em
+# terraform/runner/variables.tf (decisão D44) — nome do parâmetro, nunca o
+# valor. Só é lido aqui para saber ONDE gravar; o valor nunca entra em
+# variável de make (apareceria em 'ps'/histórico), só em variável de shell
+# lida com `read -rs` dentro do próprio alvo.
+RUNNER_TOKEN_SSM_PARAMETER ?= /fiap-cbml-42/runner-registration-token
+GITHUB_REPO_URL := https://github.com/vamperst/FIAP-Cloud-Based-Machine-Learning
+
 export PYTHONPATH := src
 # Mesma razao do 04.1: um so binario de terraform para make, scripts Python e
 # para quem le os outputs do state (src/lab42/aws.py:terraform_outputs).
 export TF
 
 .PHONY: help setup doctor preflight backend model-v1 model-v2 \
-        runner-plan runner-apply runner-status runner-register-help \
+        runner-plan runner-apply runner-token runner-status runner-register-help \
         plan-v1 deploy-v1 status-v1 smoke-v1 benchmark-v1 quality \
         pipeline-preflight autoscaling-status compare evidence \
         destroy-models runner-destroy destroy-all verify-clean e2e clean
@@ -41,7 +50,9 @@ help: ## Lista os alvos disponiveis
 	@echo "  Trilha V1 (manual, Codespaces):"
 	@echo "    make setup doctor preflight backend model-v1 plan-v1 deploy-v1 status-v1 smoke-v1 benchmark-v1 quality"
 	@echo "  Trilha V2 (pipeline, runner efemero):"
-	@echo "    make runner-plan runner-apply runner-register-help   # depois: git push, workflow 04-2-deploy-v2.yml roda no runner"
+	@echo "    make runner-token runner-plan runner-apply   # depois: git push, workflow 04-2-deploy-v2.yml roda no runner"
+	@echo "    (runner-token grava o token no SSM antes do apply - registro automatico no boot, decisao D44;"
+	@echo "     make runner-register-help mostra o caminho automatico e o manual/fallback)"
 	@echo "  Fechamento: make evidence destroy-models runner-destroy destroy-all verify-clean"
 	@echo "  Ciclo local completo (so V1 + infra + qualidade, nunca V2): make e2e"
 
@@ -89,9 +100,13 @@ quality: doctor ## Roda a avaliacao generativa (nunca exact-match) contra o V1 -
 
 # --------------------------------------------------------------------------- #
 # Trilha V2 - runner self-hosted efemero (terraform/runner, dono: A5). O
-# registro do runner no GitHub exige colar um token gerado na hora pela UI do
-# GitHub (Settings -> Actions -> Runners -> New self-hosted runner); nenhum
-# PAT e inventado ou armazenado para automatizar esse passo (blueprint S19).
+# registro do runner no GitHub exige um token de curta duracao gerado na hora
+# pela UI do GitHub (Settings -> Actions -> Runners -> New self-hosted
+# runner); nenhum PAT (token de longa duracao) e inventado ou armazenado para
+# automatizar esse passo (blueprint S19). `runner-token` grava esse token de
+# curta duracao como SecureString no SSM Parameter Store so para o boot da
+# proxima instancia consumir e apagar sozinho (decisao D44) - nunca fica
+# guardado depois do registro, e o valor nunca passa pelo Terraform.
 # --------------------------------------------------------------------------- #
 
 runner-plan: doctor ## Planeja a EC2 efemera do runner (t3.medium, IMDSv2 hop-limit 1) - dono: A5
@@ -102,10 +117,43 @@ runner-apply: doctor ## Provisiona a EC2 do runner - dono: A5
 	@$(TF) -chdir=terraform/runner apply -input=false -auto-approve
 	@$(TF) -chdir=terraform/runner output
 
+runner-token: doctor ## Grava o token de registro no SSM (SecureString) - roda ANTES de runner-apply p/ registro automatico (decisao D44)
+	@echo "===============================================================" >&2; \
+	echo "Cole o token de registro do GitHub:" >&2; \
+	echo "  Settings -> Actions -> Runners -> New self-hosted runner" >&2; \
+	echo "  ($(GITHUB_REPO_URL)/settings/actions/runners/new)" >&2; \
+	echo "O token nao aparece na tela, nao fica em historico e nunca e" >&2; \
+	echo "argumento deste make (isso apareceria em 'ps'/historico do shell)." >&2; \
+	echo "Ele expira em poucos minutos - copie e cole aqui na sequencia." >&2; \
+	echo "===============================================================" >&2; \
+	read -rs runner_token; \
+	echo >&2; \
+	if [ -z "$${runner_token:-}" ]; then \
+		echo "Erro: token vazio, nada foi gravado." >&2; \
+		exit 1; \
+	fi; \
+	AWS_PAGER="" aws ssm put-parameter \
+		--name "$(RUNNER_TOKEN_SSM_PARAMETER)" \
+		--type SecureString \
+		--value "$$runner_token" \
+		--overwrite >/dev/null; \
+	unset runner_token; \
+	echo "Token gravado em $(RUNNER_TOKEN_SSM_PARAMETER) (SecureString)." >&2; \
+	echo "Rode 'make runner-apply' a seguir: o user-data le e apaga este parametro no boot." >&2
+
 runner-status: doctor ## Consulta se o runner esta registrado e online no GitHub - dono: A5
 	@$(PYTHON) $(SCRIPTS)/runner_status.py
 
-runner-register-help: ## Imprime o passo manual exato para registrar o runner no GitHub (token via UI)
+runner-register-help: ## Imprime os dois caminhos de registro: automatico (SSM, default) e manual/fallback (token via UI)
+	@echo "===============================================================" >&2
+	@echo "Caminho automatico (default, decisao D44 - sem sessao SSM/login GitHub):" >&2
+	@echo "  1. make runner-token   # cola o token, grava SecureString no SSM" >&2
+	@echo "  2. make runner-apply   # user-data le o parametro no boot," >&2
+	@echo "                         # registra o runner e apaga o parametro sozinho" >&2
+	@echo "  Confira: terraform -chdir=terraform/runner output runner_token_ssm_check_command" >&2
+	@echo >&2
+	@echo "Caminho manual/fallback (se o parametro nao existia ou o registro" >&2
+	@echo "automatico falhou - ver /var/log/user-data.log na instancia):" >&2
 	@bash $(SCRIPTS)/register_runner.sh --help
 
 pipeline-preflight: ## Prova, dentro do workflow, que a credencial do runner e instance profile (nunca chave estatica) - dono: A5/A8
@@ -157,8 +205,8 @@ e2e: ## Ciclo local completo: V1 + infra + qualidade (nunca registra o runner ne
 	$(MAKE) --no-print-directory benchmark-v1; \
 	$(MAKE) --no-print-directory quality; \
 	$(MAKE) --no-print-directory evidence; \
-	echo "== e2e local terminou aqui. V2 exige um runner self-hosted registrado"; \
-	echo "   manualmente (make runner-plan / runner-apply / runner-register-help) e"; \
+	echo "== e2e local terminou aqui. V2 exige um runner self-hosted (make runner-token"; \
+	echo "   / runner-plan / runner-apply - registro automatico no boot, decisao D44) e"; \
 	echo "   um 'git push' que dispare .github/workflows/04-2-deploy-v2.yml =="
 
 clean: ## Remove artefatos locais gerados (nunca toca na AWS)

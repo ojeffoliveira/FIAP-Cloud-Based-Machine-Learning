@@ -122,6 +122,52 @@ variable "jq_linux_amd64_sha256" {
   default     = "b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f"
 }
 
+variable "make_version" {
+  description = <<-EOT
+    Versão do pacote "make" instalada via .deb oficial do Ubuntu 22.04
+    (jammy), baixado por HTTPS direto de archive.ubuntu.com/pool — nunca via
+    apt-get/mirrorlist (que exigiria porta 80, decisão D8). BUG REAL
+    encontrado na execução do pipeline V2: o job no runner falhava com
+    "exit code 127" em `make pipeline-preflight` e `make clean` porque esta
+    AMI não tem make de fábrica. Este pacote não precisa de gcc/toolchain
+    de compilação nenhuma — make só interpreta o Makefile e chama scripts
+    já instalados (Python, Terraform, aws). Única dependência do pacote é
+    libc6 (>= 2.34), que já vem de fábrica na AMI 22.04 (glibc 2.35).
+  EOT
+  type        = string
+  default     = "4.3-4.1build1"
+}
+
+variable "make_deb_sha256" {
+  description = <<-EOT
+    SHA-256 de make_<versão>_amd64.deb, conferido por download real e
+    cruzado com o SHA256 publicado no índice assinado do próprio Ubuntu
+    (dists/jammy/main/binary-amd64/Packages.gz, campo SHA256 do pacote
+    "make") antes de travar aqui.
+  EOT
+  type        = string
+  default     = "080b79a1a1623a2e6c6eead37d62b15fdf2c3dbfeafe8ecf5e31c54eb09eadcc"
+}
+
+variable "runner_token_ssm_parameter" {
+  description = <<-EOT
+    NOME (não o valor) do parâmetro SSM SecureString onde `make runner-token`
+    grava o token de registro do runner (decisão D44). O Terraform só recebe
+    este nome — nome de parâmetro não é segredo. O valor nunca passa por
+    aqui: NUNCA declarar um `data "aws_ssm_parameter"` apontando para este
+    nome neste stack, porque isso faria o Terraform ler o valor e gravá-lo
+    no state (S3), exatamente o vazamento que a spec §9 proíbe. Só a
+    instância, via AWS CLI dentro do user-data, lê e apaga o valor.
+  EOT
+  type        = string
+  default     = "/fiap-cbml-42/runner-registration-token"
+
+  validation {
+    condition     = can(regex("^/[A-Za-z0-9_./-]+$", var.runner_token_ssm_parameter))
+    error_message = "O nome do parâmetro SSM precisa começar com \"/\" e usar só caracteres válidos para Parameter Store."
+  }
+}
+
 variable "aws_cli_gpg_public_key" {
   description = <<-EOT
     Chave pública GPG "AWS CLI Team <aws-cli@amazon.com>", fingerprint

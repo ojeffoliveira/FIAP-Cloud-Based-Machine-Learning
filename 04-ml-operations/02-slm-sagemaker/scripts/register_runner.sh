@@ -1,6 +1,14 @@
 #!/bin/bash
 # Registra o runner self-hosted do GitHub Actions nesta instância EC2 (Lab 04.2).
 #
+# CAMINHO MANUAL (este script). Existe também um CAMINHO AUTOMÁTICO (decisão
+# D44, padrão): `make runner-token` grava o token como SecureString no SSM
+# Parameter Store ANTES de `make runner-apply`; o user-data lê, registra e
+# apaga o parâmetro sozinho no boot — sem sessão SSM interativa, sem login do
+# GitHub no Codespaces (ver terraform/runner/templates/user_data.sh.tftpl,
+# seção 6.1). Use este script manual só se o automático não rodou (parâmetro
+# nunca foi gravado) ou falhou (ver /var/log/user-data.log na instância).
+#
 # Roda manualmente, dentro de uma sessão SSM Session Manager, iniciada pelo
 # aluno depois que o user-data terminar (terraform/runner/templates/
 # user_data.sh.tftpl). O pipeline de CI/CD NUNCA chama este script: o registro
