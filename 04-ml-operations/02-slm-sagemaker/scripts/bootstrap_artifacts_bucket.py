@@ -33,10 +33,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from botocore.exceptions import ClientError  # noqa: E402
+from botocore.exceptions import ClientError
 
-from lab42 import aws  # noqa: E402
-from lab42.aws import LabError, emit, log  # noqa: E402
+from lab42 import aws
+from lab42.aws import LabError, emit, log
 
 
 def _naming() -> dict[str, str]:

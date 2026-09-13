@@ -276,25 +276,77 @@ def looks_like_ptbr(texto: str) -> tuple[bool, dict[str, Any]]:
 _CPF_RE = re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 _PHONE_RE = re.compile(r"\b(?:\+?55\s?)?\(?\d{2}\)?[\s-]?9?\d{4}[\s-]?\d{4}\b")
-_MONEY_OR_PERCENT_RE = re.compile(r"r\$\s?\d|\b\d+([.,]\d+)?\s?%|\bdesconto\s+de\s+\d")
+
+# Vocabulário de valor monetário/desconto GENUINAMENTE inventado — não basta o
+# texto conter um número ou percentual qualquer, porque o próprio contexto
+# enviado ao modelo já traz `probabilidade_churn` como fração (0.87) e o
+# modelo tem que poder ecoar esse risco como "87%" sem ser marcado como
+# "inventando um desconto" (esse era o bug real: uma regex de percentual
+# nu marcava qualquer eco do risco de churn como valor inventado). Só reprova
+# quando o texto usa vocabulário de moeda/desconto explícito.
+_DESCONTO_INVENTADO_RE = re.compile(
+    r"r\$\s?\d"
+    r"|desconto\s+de\s+\d"
+    r"|\d+([.,]\d+)?\s?%\s+de\s+desconto"
+    r"|cupom\b"
+    r"|abatimento\b"
+    r"|isen[cç][aã]o\b"
+    r"|gratuidade\b"
+)
+
+
+def _numeros_do_contexto(contexto: dict[str, Any]) -> set[str]:
+    """Representações textuais (fração e percentual) dos números do contexto do caso.
+
+    `probabilidade_churn` chega como fração (0.87); o modelo costuma ecoar
+    como "87%" ou repetir "0.87" — qualquer uma das duas formas conta como
+    "já estava no contexto", não como valor inventado pelo modelo.
+    """
+    numeros: set[str] = set()
+    for valor in contexto.values():
+        if isinstance(valor, bool):
+            continue
+        if isinstance(valor, (int, float)):
+            numeros.add(str(valor))
+            numeros.add(str(round(valor * 100)))
+    return numeros
+
+
+def _valor_e_eco_do_contexto(trecho: str, contexto: dict[str, Any]) -> bool:
+    """Verdadeiro se todo número do trecho batido pelo regex já vinha do contexto do caso."""
+    digitos = re.findall(r"\d+(?:[.,]\d+)?", trecho)
+    if not digitos:
+        return False
+    numeros_ctx = _numeros_do_contexto(contexto)
+    return all(d.replace(",", ".") in numeros_ctx or d in numeros_ctx for d in digitos)
+
+
+def _checar_valor_inventado(norm: str, txt: str, contexto: dict[str, Any]) -> bool:
+    """Reprova só se houver vocabulário de desconto/moeda cujo número não vem do contexto."""
+    for match in _DESCONTO_INVENTADO_RE.finditer(txt):
+        if not _valor_e_eco_do_contexto(match.group(0), contexto):
+            return True
+    return False
+
 
 # Termos conhecidos do `nao_deve_inventar` (spec §8) recebem um checador mais
 # preciso que regex/substring simples; qualquer termo fora desta lista cai no
 # fallback de substring normalizado (sem acento, minúsculo) em
-# `check_nao_inventou`.
+# `check_nao_inventou`. Todos os checadores recebem `contexto` (mesmo os que
+# não usam) para manter uma assinatura única e simples de chamar.
 _TERMO_CHECADORES: dict[str, Any] = {
-    "cpf": lambda norm, txt: bool(_CPF_RE.search(txt)) or "cpf" in norm,
-    "telefone": lambda norm, txt: (
+    "cpf": lambda norm, txt, contexto: bool(_CPF_RE.search(txt)) or "cpf" in norm,
+    "telefone": lambda norm, txt, contexto: (
         bool(_PHONE_RE.search(txt)) or "telefone" in norm or "whatsapp" in norm
     ),
-    "endereco": lambda norm, txt: (
+    "endereco": lambda norm, txt, contexto: (
         "endereco" in norm or "rua " in norm or "avenida " in norm
     ),
-    "e-mail": lambda norm, txt: bool(_EMAIL_RE.search(txt)) or "email" in norm,
-    "email": lambda norm, txt: bool(_EMAIL_RE.search(txt)) or "email" in norm,
-    "valor de desconto especifico": lambda norm, txt: bool(
-        _MONEY_OR_PERCENT_RE.search(txt)
+    "e-mail": lambda norm, txt, contexto: (
+        bool(_EMAIL_RE.search(txt)) or "email" in norm
     ),
+    "email": lambda norm, txt, contexto: bool(_EMAIL_RE.search(txt)) or "email" in norm,
+    "valor de desconto especifico": _checar_valor_inventado,
 }
 
 
@@ -304,8 +356,18 @@ def _normalizar(texto: str) -> str:
     return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
 
 
-def check_nao_inventou(texto: str, termos_proibidos: list[str]) -> list[str]:
+def check_nao_inventou(
+    texto: str,
+    termos_proibidos: list[str],
+    contexto: dict[str, Any] | None = None,
+) -> list[str]:
     """Devolve os termos de `nao_deve_inventar` (case) que aparecem no texto — heurística.
+
+    `contexto` é o mesmo dict enviado ao modelo (`caso["contexto"]`): um
+    número que o modelo ecoa de volta (ex.: a `probabilidade_churn` como
+    "87%") não é um valor inventado, é o contexto sendo repetido — só conta
+    como violação quando o vocabulário de moeda/desconto aparece com um
+    número que NÃO estava no contexto (ver `_checar_valor_inventado`).
 
     Limitações: substring normalizado não detecta paráfrase (ex.: o modelo
     poderia descrever um desconto sem usar "%", "R$" nem a palavra
@@ -317,11 +379,12 @@ def check_nao_inventou(texto: str, termos_proibidos: list[str]) -> list[str]:
     """
     texto_lower = texto.lower()
     norm = _normalizar(texto)
+    ctx = contexto or {}
     violacoes = []
     for termo in termos_proibidos:
         chave = _normalizar(termo)
         checador = _TERMO_CHECADORES.get(chave)
-        encontrado = checador(norm, texto_lower) if checador else chave in norm
+        encontrado = checador(norm, texto_lower, ctx) if checador else chave in norm
         if encontrado:
             violacoes.append(termo)
     return violacoes
@@ -442,7 +505,7 @@ def evaluate_case(
         razoes.append("nao_parece_portugues")
 
     proibidos = checks.get("nao_deve_inventar", [])
-    violacoes = check_nao_inventou(texto, proibidos)
+    violacoes = check_nao_inventou(texto, proibidos, contexto)
     detalhes["violacoes_pii_ou_valor"] = violacoes
     if violacoes:
         razoes.append(f"citou_termo_proibido:{violacoes}")

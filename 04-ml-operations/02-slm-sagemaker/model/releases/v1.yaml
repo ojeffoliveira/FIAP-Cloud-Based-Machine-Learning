@@ -79,4 +79,12 @@ temperature: 0.0
 # isola quantização/artefato/pipeline como a única variável quando o
 # `make compare` cruzar V1 x V2. Bump este valor só quando
 # prompts/retention-system.txt mudar de contrato de saída.
-prompt_contract_version: "1.0.0"
+#
+# 1.1.0 (A8): o contrato 1.0.0 deixava o modelo gastar quase todo o orçamento
+# de 64 tokens reafirmando os campos do contexto e truncava antes da
+# recomendação (saída real observada: "...Além disso, o uso de 30 dias de
+# atraso é considerado baixo. A próxima a" — cortado ao começar a ação). O
+# contrato 1.1.0 exige começar pela ação e proíbe listar de volta os campos
+# do contexto, citando o risco só de forma breve e qualitativa. O limite de
+# 64 tokens em max_output_tokens (linha acima) não mudou.
+prompt_contract_version: "1.1.0"

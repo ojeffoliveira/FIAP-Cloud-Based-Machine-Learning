@@ -83,35 +83,47 @@ sagemaker:
       min_capacity: 1
       max_capacity: 2
       target_metric: SageMakerVariantInvocationsPerInstance
-      # <<A2>>: o alvo de invocations/instância só é calibrado depois do
-      # benchmark real (make benchmark-v1); um chute aqui dispararia
-      # autoscaling no primeiro smoke test ou nunca dispararia.
-      target_value: <<A2>>
-      # <<A2>>: cooldown de scale-out curto porém seguro, medido; scale-in
-      # maior que scale-out por design (evita oscilação), mas o valor exato
-      # dos dois só é fixado depois do preflight.
-      scale_out_cooldown_s: <<A2>>
-      scale_in_cooldown_s: <<A2>>
+      # Medido em 2026-09-12 (benchmark.py --release v1, 15 req sequenciais):
+      # p95=2624.9ms. throughput_max_serializado = 60/2,6249 ≈ 22,86 inv/min;
+      # margem de 65% (mesmo raciocínio de terraform/slm/autoscaling.tf):
+      # 22,86 * 0,65 ≈ 14,86 → 15. Diverge do local hardcoded (20) em
+      # terraform/slm/autoscaling.tf, que usa o probe antigo (p95=1,96s) —
+      # divergência real registrada em execucao-real.md, não corrigida aqui
+      # (fora do escopo: só preenche lab.yaml, não edita .tf).
+      target_value: 15
+      # Cooldowns assimétricos por design (mesmo princípio de
+      # terraform/slm/autoscaling.tf): scale-out curto (60s) porque uma nova
+      # ml.m5.xlarge já demora minutos para ficar InService — medido nesta
+      # execução: 2min03s (23:28:20->23:30:23 -03:00); scale-in mais longo
+      # (300s) evita destruir/recriar capacidade por queda passageira.
+      scale_out_cooldown_s: 60
+      scale_in_cooldown_s: 300
 
 # Parâmetros de inferência do SLM (dono do runtime: A2/A8). Nenhum destes é um
 # chute de conforto — cada `<<A2>>` é preenchido pelo preflight de
 # resolve_runtime.py contra o DLC e o endpoint reais, nunca por analogia com o
 # limite teórico do modelo.
 inference:
-  # <<A2>>: 1024 ou 2048, decidido pelo preflight (o modelo suporta muito mais,
-  # mas o lab não usa contexto grande só porque o modelo aceita).
-  max_context_tokens: <<A2>>
-  # <<A2>>: teto de projeto é 64; o preflight confirma que é suficiente para o
-  # contrato de saída de 2-3 frases em português.
-  max_output_tokens: <<A2>>
+  # Confirmado por resolve_runtime.py (preflight A2, 2026-09-12): LLAMA_ARG_CTX_SIZE
+  # provado no log do llama-server como n_ctx=2048.
+  max_context_tokens: 2048
+  # Confirmado por resolve_runtime.py (preflight A2). ACHADO REAL (evaluate.py
+  # --release v1, 2026-09-12): com 64 tokens, 8/8 casos deram finish_reason=length
+  # (resposta cortada no meio da frase) — o teto de projeto NÃO se mostrou
+  # suficiente para o contrato de 2-3 frases na prática; ver execucao-real.md.
+  max_output_tokens: 64
   # Temperatura 0 é decisão de design (reprodutibilidade de smoke/eval), não de
   # medição — não carrega marcador.
   temperature: 0.0
-  # <<A2>>: envelope de latência (p50/p95 aceitáveis) só existe depois do
-  # benchmark real; ver 09_IMPLEMENTATION_BLUEPRINT.md §14 e §7 da spec.
+  # Medido em 2026-09-12 (benchmark.py --release v1, 15 req sequenciais,
+  # max_tokens=64): p50=2580.9ms, p95=2624.9ms. p95_max = round(2624.9*1,3)
+  # arred. 50ms = 3400 (valor gerado pelo próprio benchmark.py, gravado em
+  # .generated/runtime.json). p50_max = 2580.9ms arredondado para cima ao
+  # múltiplo de 50ms (sem margem de cauda — só arredondamento; nenhum script
+  # do lab hoje faz enforcement de p50_max, só de p95_max em evaluation.py).
   latency_envelope_ms:
-    p50_max: <<A2>>
-    p95_max: <<A2>>
+    p50_max: 2600
+    p95_max: 3400
 
 # Tags propagadas em todo recurso AWS do lab (SageMaker, S3, EC2, CloudWatch),
 # amarrando por API a origem e a capacidade de negócio — o mesmo mecanismo do

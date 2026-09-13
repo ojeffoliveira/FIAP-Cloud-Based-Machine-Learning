@@ -55,5 +55,7 @@ max_context: 2048
 max_output_tokens: 64
 temperature: 0.0
 
-# Idêntico a V1 — ver comentário em v1.yaml sobre por que isso é proposital.
-prompt_contract_version: "1.0.0"
+# Idêntico a V1 — ver comentário em v1.yaml sobre por que isso é proposital e
+# sobre a correção do A8 (contrato 1.1.0: começar pela ação, sem reafirmar
+# campos do contexto, dentro do mesmo limite de 64 tokens).
+prompt_contract_version: "1.1.0"

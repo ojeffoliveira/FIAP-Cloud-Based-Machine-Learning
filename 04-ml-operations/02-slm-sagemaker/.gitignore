@@ -17,6 +17,9 @@ terraform.tfstate.*
 *.tfstate.*
 .terraform/
 *.tfplan
+# `terraform plan -out=tfplan-runner` gera arquivo sem extensão, que o padrão
+# acima não pega — e plano de execução nunca deve ser versionado.
+tfplan*
 terraform.tfvars
 crash.log
 crash.*.log

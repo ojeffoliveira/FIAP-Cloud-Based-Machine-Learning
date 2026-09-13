@@ -13,20 +13,26 @@ resource "aws_security_group" "runner" {
   # isso evitando apt-get, não abrindo porta por conveniência.
   egress = []
 
+  # BUG REAL encontrado em execução (não hipotético): misturar o atributo
+  # legado "egress" aqui com o recurso separado aws_vpc_security_group_egress_rule
+  # abaixo faz o provider tratar os dois como fontes de verdade conflitantes —
+  # todo apply deste recurso reconcilia a SG contra "egress = []" e REVOGA a
+  # regra de 443 criada pelo outro recurso. `ignore_changes` trava o legado no
+  # valor já aplicado e devolve a autoridade exclusiva para o recurso dedicado.
+  lifecycle {
+    ignore_changes = [egress]
+  }
+
   tags = merge(local.tags, { Name = local.sg_name })
 }
 
 resource "aws_vpc_security_group_egress_rule" "https" {
   security_group_id = aws_security_group.runner.id
-  description       = <<-EOT
-    HTTPS apenas (decisão D8 do coordenador). O A3 provou (runner-provado.md)
-    que os mirrors padrão do apt (*.ec2.archive.ubuntu.com, security.ubuntu.com)
-    só servem HTTP — mas a resposta a isso NÃO é abrir a porta 80. É o
-    user-data evitar apt-get e instalar cada dependência via download HTTPS
-    oficial com checksum/assinatura verificados (AWS CLI, Terraform, runner do
-    GitHub, jq), exatamente como já fazíamos para os três primeiros. Ver
-    templates/user_data.sh.tftpl para o "porquê" de cada item.
-  EOT
+  # NOTA (fix real, nao cosmetico): a descricao de regra de SG na API EC2
+  # aceita só o charset a-zA-Z0-9. _-:/()#,@[]+=&;{}!$* (sem acento, sem
+  # aspas, menos de 256 chars) — o texto original em PT-BR acentuado violava
+  # isso e o apply falhava com InvalidParameterValue. Reescrito sem acentos.
+  description       = "HTTPS apenas (decisao D8). Mirrors do apt exigem porta 80, mas a solucao e evitar apt-get: user-data baixa cada dependencia via HTTPS oficial com checksum/assinatura verificados. Ver templates/user_data.sh.tftpl."
   ip_protocol       = "tcp"
   from_port         = 443
   to_port           = 443

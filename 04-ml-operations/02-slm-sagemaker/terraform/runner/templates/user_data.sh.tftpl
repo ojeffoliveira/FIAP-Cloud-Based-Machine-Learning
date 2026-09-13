@@ -102,6 +102,12 @@ AWS_CLI_GPG_PUBLIC_KEY
   # unzip não vem de fábrica na AMI e não instalamos via apt (egress 443-only);
   # python3 (esse sim de fábrica) resolve sem dependência nova.
   python3 -m zipfile -e awscliv2.zip .
+
+  # python3 -m zipfile descarta o bit de execução que o unzip preservaria, então o
+  # instalador e os binários extraídos precisam receber permissão explicitamente —
+  # sem isso o install aborta com "Permission denied" e o resto do provisionamento
+  # (Terraform, runner do GitHub, marcador) nunca acontece.
+  chmod -R u+x ./aws
   ./aws/install
 
   cd /
