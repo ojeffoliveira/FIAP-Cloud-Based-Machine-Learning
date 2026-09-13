@@ -11,7 +11,7 @@ faz a pergunta que sobra depois do go-live: **como sabemos que ela continua corr
 | Lab | Título | Estado |
 |---|---|---|
 | [04.1](01-observability-drift-response/README.md) | Observabilidade, drift e resposta operacional | Disponível |
-| 04.2 | SLM no SageMaker | Laboratório futuro |
+| [04.2](02-slm-sagemaker/README.md) | SLM no SageMaker | Disponível |
 
 ### 04.1 — Observabilidade, drift e resposta operacional
 
