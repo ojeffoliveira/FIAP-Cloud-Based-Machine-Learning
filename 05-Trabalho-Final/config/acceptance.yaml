@@ -1,0 +1,104 @@
+# Gates técnicos do dataset do Trabalho Final — dados, não código.
+#
+# `data_contract.py` e `evidence.py` (A7) leem este arquivo para saber
+# "o que precisa ser verdade" sem duplicar limiar em Python. Os números aqui
+# são o resultado medido da calibração (`/tmp/tf-final/a2/calibracao.md`),
+# sempre com margem sobre o piso exigido por `04_DATASET_AND_ACCEPTANCE.md`
+# — a margem existe porque o XGBoost real do SageMaker vai divergir um
+# pouco do proxy usado para calibrar localmente.
+#
+# Isto são gates de FUNCIONAMENTO (o dataset se comporta como o cenário
+# promete?), nunca nota: não há peso, percentual ou pontuação em nenhuma
+# chave abaixo.
+
+schema_version: "1.0.0"
+
+# Linhas esperadas por arquivo em artifacts/data/ — o primeiro bloco de
+# verificação de `data_contract.py`. Um valor fora daqui significa que o
+# gerador ou a config saiu do lugar, não uma decisão de calibração.
+row_counts:
+  train.csv: 2800
+  validation.csv: 600
+  reference.csv: 600
+  production_baseline.csv: 200
+  production_shifted.csv: 200
+  campaign_features.csv: 600
+  ground_truth_baseline.csv: 200
+  ground_truth_shifted.csv: 200
+  atendimento.csv: 40
+
+# Prevalência de churn plausível — faixa alargada em torno do que o gerador
+# de fato produz (~0.36-0.40 nas janelas de produção). Fora dela, o gerador
+# mudou e todo limiar a jusante fica suspeito.
+prevalence_range: [0.20, 0.55]
+
+# Faixas de valor plausíveis por feature — espelham `scenario.bounds`, mas
+# vivem aqui de novo porque este arquivo é o que `data_contract.py` lê sem
+# precisar reabrir `scenario.yaml`: um contrato de aceite não deveria
+# depender de outro arquivo de config para saber o que é um valor válido.
+ranges:
+  tenure_months: [1, 72]
+  monthly_charges: [20.0, 280.0]
+  support_calls_90d: [0, 30]
+  payment_delay_days: [0.0, 60.0]
+  usage_score: [5.0, 100.0]
+  annual_contract: [0, 1]
+  premium_plan: [0, 1]
+
+# PSI — mesma matemática do lab 04.1 (quantil na referência, categórico para
+# variável com poucos valores distintos, epsilon no lugar de zero).
+drift:
+  bins: 5
+  epsilon: 1.0e-6
+  # Limiar por feature que o dashboard/alarme usam para apontar "esta
+  # variável é a culpada" — mesmo limiar didático do CONTRATO (0.20).
+  feature_alert_threshold: 0.20
+  baseline:
+    data_psi_max_below: 0.10
+    prediction_psi_below: 0.10
+  shifted:
+    data_psi_max_at_least: 0.30
+    features_above_threshold_at_least: 3
+    prediction_psi_at_least: 0.20
+
+# Qualidade do modelo — medida com o proxy de calibração, ver
+# calibracao.md. F1/ROC-AUC reais do XGBoost variam por execução: por isso
+# os pisos aqui têm margem generosa sobre `04_DATASET_AND_ACCEPTANCE.md`
+# (F1 baseline >= 0.72, ROC-AUC baseline >= 0.82, queda de F1 >= 0.15) em vez
+# de cravar o valor medido numa única rodada.
+quality:
+  decision_threshold: 0.5
+  baseline:
+    f1_min: 0.72
+    roc_auc_min: 0.82
+  shifted:
+    f1_drop_at_least: 0.15
+  # Como o modelo passa a errar depois do shift — para o README e o
+  # dashboard nomearem o modo de falha em vez de só reportar "F1 caiu".
+  # Calibração mediu excesso de falso positivo: depois do reajuste, preço
+  # alto + chamado alto + atraso alto aparecem para quase toda a base, e o
+  # modelo aprendeu esse padrão como churn — ele passa a prever churn quase
+  # universal. Recall de churn continua alto; precisão desaba.
+  shifted_failure_mode: "falso_positivo"
+
+# Separação de risco dos 40 clientes de atendimento — calculada pela
+# probabilidade sistemática da relação `base` (sem sortear rótulo, ver
+# `dataset.systematic_probability`), porque o contrato roda ANTES de existir
+# um modelo treinado.
+atendimento:
+  expected_rows: 40
+  high_risk_probability_at_least: 0.70
+  low_risk_probability_at_most: 0.10
+  min_probability_spread: 0.50
+
+# Contagens que os workloads (A5) precisam produzir em runtime — os mesmos
+# números do dataset de entrada, porque nem atendimento nem campanha
+# descartam linha.
+workload_counts:
+  campanha_output_count: 600
+  atendimento_output_count: 40
+
+# Cobertura do ground truth: todo observation_id de uma janela de produção
+# precisa aparecer no ground truth correspondente, sem sobra e sem falta.
+ground_truth:
+  full_coverage_required: true

@@ -1,0 +1,9 @@
+# Versões exatas, fixadas para a execução de todo aluno resolver o mesmo
+# grafo de dependências — igual ao padrão de 04-ml-operations/01-observability-
+# drift-response/requirements.txt, de onde estes números vêm.
+boto3==1.43.73
+botocore==1.43.73
+numpy==2.5.2
+scikit-learn==1.9.0
+PyYAML==6.0.3
+pytest==9.0.1

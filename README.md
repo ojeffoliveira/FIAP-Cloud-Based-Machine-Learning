@@ -18,7 +18,7 @@ Você irá percorrer um caminho que evolui de um modelo isolado até um sistema 
 2. **Do modelo ao sistema** — contrato de dados executável, training job, artefato lido pela API e endpoint real-time servindo um XGBoost treinado na sua conta.
 3. **Serving e escala** — o mesmo `model.tar.gz` sustentando quatro contratos de consumo (real-time, serverless, async e batch transform), com autoscaling real e elasticidade provada por API.
 4. **Operação e observabilidade** — drift de dados e de predições com PSI, métricas customizadas no CloudWatch, dashboard, alarme que vira incidente via EventBridge e Lambda, e a queda de qualidade medida quando o ground truth chega.
-5. **Trabalho Final** — projeto end-to-end consolidando o ciclo de vida completo (em preparação).
+5. **Trabalho Final** — projeto end-to-end consolidando o ciclo de vida completo.
 
 Um fio conduz a disciplina inteira: **infraestrutura verde não é o mesmo que sistema correto.** Cada laboratório termina com um dossiê de evidência conferível e com a conta limpa, comprovada por varredura de API.
 
@@ -81,7 +81,7 @@ Dentro de cada lab, `make help` lista todos os alvos disponíveis e a ordem em q
 | 03 | **Serving and Scaling** | Um único `model.tar.gz` sustentando quatro contratos de consumo — Real-Time, Serverless e Async Endpoints mais um Batch Transform Job — com Application Auto Scaling configurado e uma demonstração determinística de elasticidade 1→2→1 provada por API. Latência (p50/p95/p99) versus throughput. | 75–95 min | [03-serving-and-scaling](03-serving-and-scaling/README.md) |
 | 04.1 | **Observabilidade, drift e resposta operacional** | Prova na AWS real que um endpoint pode estar `InService`, responder HTTP 200 e ainda assim o modelo estar errado. Drift de dados e de predições com PSI, métricas customizadas no CloudWatch, dashboard em tempo quase real, alarme que vira incidente via EventBridge e Lambda, e a queda de F1/ROC-AUC medida quando o ground truth chega atrasado. Fecha com um `DECISION.md` escrito pelo aluno. | ~70 min | [04-ml-operations/01-observability-drift-response](04-ml-operations/01-observability-drift-response/README.md) |
 | 04.2 | **SLM no SageMaker** | Deploy de um *small language model* no SageMaker, aplicando as mesmas perguntas de operação a um tipo de modelo em que "resposta certa" é bem mais difícil de definir. **Ainda não publicado.** | — | — |
-| 05 | **Trabalho Final** | Projeto end-to-end consolidando ingestão, treino, serving e operação, com entregáveis prontos para upload no portal FIAP. **Ainda não publicado.** | — | — |
+| 05 | **Trabalho Final** | Projeto end-to-end consolidando ingestão, treino, serving e operação, com entregáveis prontos para upload no portal FIAP. | ~90 min | [05-Trabalho-Final](05-Trabalho-Final/README.md) |
 
 ---
 
@@ -102,7 +102,7 @@ Dentro de cada lab, `make help` lista todos os alvos disponíveis e a ordem em q
 ├── 03-serving-and-scaling/                  # Lab 03 — quatro contratos de consumo + autoscaling
 ├── 04-ml-operations/                        # Aula 3 — operação, confiabilidade e MLOps
 │   └── 01-observability-drift-response/     #   Lab 04.1 — PSI, CloudWatch, EventBridge, Lambda
-├── 05-final-project/                        # Trabalho final (em preparação)
+├── 05-Trabalho-Final/                       # Trabalho final — do modelo à decisão operacional
 ├── .devcontainer/                           # Configuração do GitHub Codespaces
 └── fiap.png
 ```
@@ -126,7 +126,7 @@ Os labs 02, 03 e 04.1 seguem a mesma anatomia: `config/` com os parâmetros, `sc
 04.1 Observabilidade, drift e resposta operacional
    │
    ▼
-05 Trabalho Final (em preparação)
+05 Trabalho Final
 ```
 
 Cada laboratório assume que os anteriores foram concluídos. Em especial:

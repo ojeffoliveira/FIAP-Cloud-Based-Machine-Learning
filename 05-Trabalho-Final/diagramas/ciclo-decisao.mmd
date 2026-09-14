@@ -1,0 +1,55 @@
+flowchart TD
+    subgraph fase1["Fase 1 — Preparar"]
+        requisitos["Requisitos dos dois workloads<br/>atendimento e campanha"]
+        escolhas["Duas escolhas em solution.yaml<br/>um pattern por workload"]
+        requisitos --> escolhas
+    end
+
+    subgraph fase2["Fase 2 — Resolver"]
+        treino["Treino do modelo<br/>SageMaker Training Job"]
+        artifact["Artifact confirmado pela API<br/>model.tar.gz, nunca por convenção"]
+        atendimento["Atendimento<br/>pattern escolhido pelo grupo"]
+        campanha["Campanha<br/>pattern escolhido pelo grupo"]
+        observabilidade["Observabilidade e drift<br/>baseline vs. janela deslocada"]
+        incidente["Incidente aberto<br/>EventBridge + Lambda"]
+        verdade["Verdade atrasada<br/>ground truth e qualidade"]
+        decisao["Decisão registrada<br/>DECISION.md"]
+
+        treino --> artifact
+        artifact --> atendimento
+        artifact --> campanha
+        atendimento --> observabilidade
+        campanha --> observabilidade
+        observabilidade --> incidente
+        incidente --> verdade
+        verdade --> decisao
+    end
+
+    subgraph fase3["Fase 3 — Entregar"]
+        cleanup["Cleanup provado por API"]
+        zip["Pacote ZIP validado<br/>trabalho-final-cloud-ml.zip"]
+        cleanup --> zip
+    end
+
+    escolhas --> treino
+    decisao --> cleanup
+
+    classDef preparar fill:#eef6ff,stroke:#495057,stroke-width:1px,color:#1e1e1e
+    classDef artifactCls fill:#f3e8ff,stroke:#6f42c1,stroke-width:1px,color:#3a1d6e
+    classDef servingCls fill:#e3f9f5,stroke:#0f9b8e,stroke-width:1px,color:#0b5c53
+    classDef obsCls fill:#fff8e1,stroke:#495057,stroke-width:1px,color:#1e1e1e
+    classDef incidenteCls fill:#fdeceb,stroke:#d13212,stroke-width:2px,color:#7a1f10
+    classDef decisaoCls fill:#fff4e5,stroke:#d97706,stroke-width:2px,color:#7a4a00
+    classDef entrega fill:#eef6ff,stroke:#495057,stroke-width:1px,color:#1e1e1e
+
+    class requisitos,escolhas preparar
+    class treino preparar
+    class artifact artifactCls
+    class atendimento,campanha servingCls
+    class observabilidade,verdade obsCls
+    class incidente incidenteCls
+    class decisao decisaoCls
+    class cleanup,zip entrega
+
+    linkStyle 4,5 stroke-dasharray:4 3,stroke:#495057,stroke-width:1.5px
+    linkStyle 6 stroke-dasharray:4 3,stroke:#d13212,stroke-width:2px

@@ -1,0 +1,228 @@
+# Cenário e parâmetros do gerador do dataset do Trabalho Final — Bora Fibra.
+#
+# Nenhum parâmetro do gerador vive em `dataset.py`: tudo que descreve "que
+# mundo os clientes vêm" está aqui, para o README (A8) poder citar o mesmo
+# número que o código usa, e para uma mudança de calibração nunca exigir
+# tocar em Python.
+#
+# Linhagem: mesma capacidade de negócio dos labs anteriores (02-ml-system,
+# 04-ml-operations/01-observability-drift-response) — Bora Fibra, churn,
+# mesma ordem de features. O trabalho final não inventa um caso novo, opera
+# essa capacidade sob dois workloads (atendimento e campanha) e sob uma
+# mudança comercial real.
+
+schema_version: "1.0.0"
+
+# Semente do contrato do trabalho final — congelada, não recalibrar.
+seed: 20260913
+
+lineage:
+  source_lab: "04-ml-operations/01-observability-drift-response"
+  business_capability: "bora-fibra-churn"
+  model_lineage: "churn-v1"
+
+dataset:
+  label: churn
+  id_column: observation_id
+  # Ordem congelada — reordenar muda o significado posicional do CSV sem
+  # cabeçalho que vai para o XGBoost nativo (contrato de treino/serving).
+  feature_order:
+    - tenure_months
+    - monthly_charges
+    - support_calls_90d
+    - payment_delay_days
+    - usage_score
+    - annual_contract
+    - premium_plan
+
+  # O "mundo" de 4.000 clientes de onde saem train/validation/reference —
+  # mesmo volume do lab 04.1, para a linhagem continuar comparável.
+  world_rows: 4000
+  splits:
+    train: 2800
+    validation: 600
+    reference: 600
+
+  # As duas janelas que chegam ao endpoint depois do go-live piloto.
+  production_windows:
+    baseline_rows: 200
+    shifted_rows: 200
+
+  # Lista noturna da campanha de retenção — mesmo tamanho de produção dos
+  # labs anteriores, de propósito: cabe no teto de 2h da disciplina.
+  campaign_rows: 600
+
+# Limites de contrato — o gerador recorta (`clip`) cada feature nestes
+# limites antes de arredondar. Não são o "desenho" da distribuição (isso é
+# `population` abaixo); são o piso/teto que faria um valor ser inválido.
+bounds:
+  tenure_months: [1, 72]
+  monthly_charges: [20.0, 280.0]
+  support_calls_90d: [0, 30]
+  payment_delay_days: [0.0, 60.0]
+  usage_score: [5.0, 100.0]
+  annual_contract: [0, 1]
+  premium_plan: [0, 1]
+
+# Casas decimais por coluna — fixas para o CSV ser byte a byte reprodutível.
+decimals:
+  tenure_months: 0
+  monthly_charges: 2
+  support_calls_90d: 0
+  payment_delay_days: 1
+  usage_score: 1
+  annual_contract: 0
+  premium_plan: 0
+
+# Centro/escala usados para transformar cada feature contínua em z-score
+# antes de entrar no modelo logístico gerador. Fixos nos dois mundos: se
+# mudassem junto com a população, o logit deixaria de ser comparável entre
+# janelas — o que tornaria o concept shift ilegível.
+center:
+  tenure_months: [36.0, 36.0]
+  monthly_charges: [110.0, 60.0]
+  support_calls_90d: [2.0, 3.0]
+  payment_delay_days: [4.0, 8.0]
+  usage_score: [65.0, 18.0]
+
+# --------------------------------------------------------------------------- #
+# História do shift comercial — Bora Fibra, semana do go-live piloto.
+# --------------------------------------------------------------------------- #
+#
+# "Sexta-feira, 16h40: tivemos reajuste de preços e mudança de política
+# comercial esta semana." (02_SPEC_FINAL_PROJECT.md §2). Cada delta abaixo é
+# a tradução numérica de uma decisão comercial concreta, nunca ruído:
+#
+#   * reajuste de mensalidade                -> monthly_charges sobe
+#   * atendimento sobrecarregado com reclamação do reajuste -> support_calls_90d sobe
+#   * novo processo de cobrança atrasa quem já estava no limite -> payment_delay_days sobe
+#   * experiência percebida piora com o preço mais alto      -> usage_score cai
+#   * empurrão comercial para planos mensais + upsell premium -> mix de
+#     annual_contract cai e premium_plan sobe
+business_narrative: |
+  Sexta-feira, 16h40. A Bora Fibra aplicou o reajuste de mensalidade e mudou
+  a política comercial na mesma semana em que o piloto de retenção vai ao ar.
+  Quem já vinha no limite do orçamento sentiu o preço novo, ligou para
+  reclamar, atrasou o boleto e usou menos o serviço. Ao mesmo tempo, a
+  operação comercial empurrou plano mensal e upsell de premium para reter
+  receita no curto prazo. Nenhuma dessas mudanças é ruído de amostragem —
+  são decisões da semana, e é isso que a janela `production_shifted`
+  reproduz feature a feature.
+
+population:
+  # O mundo em que o modelo foi treinado — antes do reajuste.
+  base:
+    charges_mean: 110.0
+    charges_sd: 38.0
+    calls_lambda: 2.0
+    delay_scale: 4.0
+    usage_mean: 65.0
+    usage_sd: 18.0
+    annual_contract_p: 0.35
+    premium_plan_p: 0.30
+  # O mundo depois do reajuste e da mudança de política comercial.
+  shifted:
+    charges_mean: 158.0 # reajuste de mensalidade
+    charges_sd: 44.0
+    calls_lambda: 5.2 # atendimento sobrecarregado
+    delay_scale: 9.5 # novo processo de cobrança atrasa pagamento
+    usage_mean: 51.0 # experiência percebida piora
+    usage_sd: 19.0
+    annual_contract_p: 0.14 # mix migrou para plano mensal
+    premium_plan_p: 0.46 # empurrão comercial no upsell premium
+
+# --------------------------------------------------------------------------- #
+# Concept shift — a relação entre feature e churn muda, não só a distribuição.
+# --------------------------------------------------------------------------- #
+#
+# Coeficientes de uma logística sobre features centradas (contínuas) ou
+# binárias (annual_contract, premium_plan). Calibrados por
+# /tmp/tf-final/a2/calibrar.py com um proxy fiel do XGBoost real — ver
+# /tmp/tf-final/a2/calibracao.md para os números medidos.
+#
+# A leitura de negócio da mudança: depois do reajuste e do novo processo de
+# cobrança, praticamente TODO MUNDO paga mais, liga mais e atrasa mais — as
+# três variáveis que antes discriminavam quem ia sair SATURAM (coeficiente
+# encolhe perto de zero) porque deixaram de distinguir alguma coisa quando
+# todo cliente está nesse estado. Fidelidade (annual_contract) e upsell
+# (premium_plan) perdem força pelo mesmo motivo. Quem continua saindo é quem
+# parou de usar o serviço de fato — `usage_score` vira o driver dominante, e
+# era a feature de menor peso relativo no mundo anterior ao reajuste. O
+# intercepto cai muito porque o modelo antigo, olhando preço alto + chamado
+# alto + atraso alto para quase toda a base, passa a prever churn quase
+# universal — o modo de falha é uma inundação de falso positivo, não de
+# falso negativo.
+relationship:
+  base:
+    intercept: -0.10
+    tenure_months: -2.30
+    monthly_charges: 2.10
+    support_calls_90d: 2.30
+    payment_delay_days: 1.60
+    usage_score: -2.10
+    annual_contract: -2.30
+    premium_plan: -0.70
+  shifted:
+    intercept: -3.90
+    tenure_months: -0.40
+    monthly_charges: 0.05 # saturou: reajuste chegou pra quase todo mundo
+    support_calls_90d: 0.10 # saturou: atendimento sobrecarregado pra quase todo mundo
+    payment_delay_days: 0.05 # saturou: atraso generalizado com o novo processo de cobrança
+    usage_score: -2.90 # virou o driver dominante do churn
+    annual_contract: -0.20 # fidelidade perdeu força discriminativa
+    premium_plan: -0.10 # upsell perdeu força discriminativa
+
+# --------------------------------------------------------------------------- #
+# Atendimento — 40 clientes fixos para consulta durante a ligação.
+# --------------------------------------------------------------------------- #
+#
+# Três perfis deterministicos (mesma seed do contrato, nunca recalculados a
+# partir de uma amostra aleatória de produção) cobrindo alto risco, baixo
+# risco e intermediário, para o `make validate-data` provar separação de
+# risco antes de qualquer treino: pelo menos um cliente claramente em risco
+# alto e um claramente em risco baixo. Population de cada perfil segue o
+# mesmo formato de `population.base/shifted`, mais uma faixa própria de
+# tenure (a idade de casa é o que mais varia entre os três perfis).
+atendimento:
+  profiles:
+    - name: high_risk
+      count: 14
+      tenure_range: [1, 6]
+      charges_mean: 230.0
+      charges_sd: 15.0
+      calls_lambda: 7.0
+      delay_scale: 20.0
+      usage_mean: 18.0
+      usage_sd: 6.0
+      annual_contract_p: 0.0
+      premium_plan_p: 0.05
+    - name: low_risk
+      count: 13
+      tenure_range: [54, 72]
+      charges_mean: 55.0
+      charges_sd: 12.0
+      calls_lambda: 0.2
+      delay_scale: 0.5
+      usage_mean: 92.0
+      usage_sd: 5.0
+      annual_contract_p: 0.95
+      premium_plan_p: 0.60
+    - name: intermediate
+      count: 13
+      tenure_range: [1, 72]
+      charges_mean: 110.0
+      charges_sd: 38.0
+      calls_lambda: 2.0
+      delay_scale: 4.0
+      usage_mean: 65.0
+      usage_sd: 18.0
+      annual_contract_p: 0.35
+      premium_plan_p: 0.30
+
+# Namespace e limiar de PSI — usados pelo config.py (Config.namespace /
+# Config.psi_threshold) e espelhados no CloudWatch (terraform/monitoring.tf,
+# entregue por A6). 0.20 é o limiar didático já congelado pelo coordenador,
+# não um resultado de calibração.
+monitoring:
+  namespace: FIAP/BoraFibra/Final
+  psi_threshold: 0.20

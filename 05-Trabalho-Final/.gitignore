@@ -1,0 +1,51 @@
+# Credencial nunca entra neste repositório.
+.env
+.env.*
+.aws/
+*.pem
+*.ppk
+
+# Arquivos gerados localmente pela automação (backend, handoff do artifact,
+# solution.yaml convertido) — recalculados a cada `make deploy`/`make run`,
+# nunca versionados.
+.generated/
+
+# State do Terraform descreve infraestrutura viva e pode conter valor sensível.
+terraform.tfstate
+terraform.tfstate.*
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfplan
+# `terraform plan -out=tfplan` gera arquivo sem extensão, que o padrão acima
+# não pega — e plano de execução nunca deve ser versionado.
+tfplan*
+terraform.tfvars
+crash.log
+crash.*.log
+
+# Pacote da Lambda: montado no apply a partir de lambda/drift_response.py,
+# nunca commitado.
+build/
+*.zip
+
+# Tudo que é gerado em tempo de execução: dataset, predições, evidence.
+artifacts/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.mypy_cache/
+.ruff_cache/
+
+.DS_Store
+
+# A regra `*Icon*` do .gitignore da raiz existe para o arquivo de recurso
+# `Icon\r` do macOS, mas com core.ignorecase=true ela casa com o diretório
+# `icones/` inteiro — sem esta negação escopada os ícones oficiais da AWS
+# usados no diagrama de arquitetura (diagramas/icones/, entregue por A10)
+# nunca entrariam no versionamento. Mesmo precedente do .gitignore de
+# 04-ml-operations/02-slm-sagemaker.
+!diagramas/icones/

@@ -1,0 +1,24 @@
+# Este é um dos dois únicos arquivos que você edita em todo o trabalho (o outro é
+# student/DECISION.md). Depois de escolher os dois patterns abaixo, rode `make run` —
+# você pode mudar este arquivo e repetir `make run` quantas vezes quiser, sem reprovisionar
+# infraestrutura.
+
+version: 1
+
+serving:
+  atendimento:
+    # requisito de negócio: uma pessoa por vez, resposta na mesma interação, tráfego
+    # recorrente, baixa tolerância a uma primeira resposta muito lenta.
+    # valores aceitos: realtime | serverless
+    pattern: TODO
+  campanha:
+    # requisito de negócio: 600 clientes de uma vez, uma execução diária, ninguém espera
+    # resposta interativa, resultado pode ser um arquivo.
+    # valores aceitos: async | batch
+    pattern: TODO
+
+authors:
+  group: ""
+  # formato de cada integrante: "Nome Completo (RM)" — exemplo de preenchimento:
+  # "Fulano da Silva (RM123456)". Não preencha os patterns acima aqui.
+  members: []

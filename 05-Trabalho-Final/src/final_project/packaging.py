@@ -93,12 +93,32 @@ _PRIVATE_KEY_RE = re.compile(r"-----BEGIN (?:RSA |OPENSSH |EC |DSA |)PRIVATE KEY
 # chave) — de outro modo o próprio código que define estes padrões (este
 # arquivo, que precisa mencionar "aws_session_token"/"SecretAccessKey" como
 # string para poder procurá-los) sempre daria falso positivo em si mesmo.
+#
+# O valor plausível não é suficiente por si só: o marcador literal seguido
+# de metacaracteres de regex (":", "=", "\s*", "\S{10,}") no texto-fonte
+# deste arquivo é, ele mesmo, "10+ caracteres não-brancos depois do
+# marcador" — ou seja, o padrão casa com a própria linha que o declara.
+# Por isso cada marcador é montado por concatenação de dois pedaços em
+# tempo de execução: o literal completo ("aws_session_token",
+# "SessionToken", "X-Amz-Security-Token", "aws_secret_access_key",
+# "SecretAccessKey") nunca aparece contíguo no código-fonte, só no valor
+# da variável depois de somado — quem "simplificar" isso de volta para uma
+# única string reintroduz o próprio bug.
+_MARCADOR_SESSION_TOKEN = "aws_session" + "_token"
+_MARCADOR_SESSION_TOKEN_JSON = "Session" + "Token"
+_MARCADOR_SESSION_TOKEN_HEADER = "X-Amz-Security" + "-Token"
+_MARCADOR_SECRET_KEY = "aws_secret" + "_access_key"
+_MARCADOR_SECRET_KEY_JSON = "Secret" + "AccessKey"
+
 _SESSION_TOKEN_RE = re.compile(
-    r'aws_session_token\s*=\s*\S{10,}|"SessionToken"\s*:\s*"[^"]{10,}"|X-Amz-Security-Token:\s*\S{10,}',
+    _MARCADOR_SESSION_TOKEN + r'\s*=\s*\S{10,}'
+    + '|"' + _MARCADOR_SESSION_TOKEN_JSON + r'"\s*:\s*"[^"]{10,}"'
+    + '|' + _MARCADOR_SESSION_TOKEN_HEADER + r':\s*\S{10,}',
     re.IGNORECASE,
 )
 _SECRET_KEY_RE = re.compile(
-    r'aws_secret_access_key\s*=\s*\S{10,}|"SecretAccessKey"\s*:\s*"[^"]{10,}"',
+    _MARCADOR_SECRET_KEY + r'\s*=\s*\S{10,}'
+    + '|"' + _MARCADOR_SECRET_KEY_JSON + r'"\s*:\s*"[^"]{10,}"',
     re.IGNORECASE,
 )
 
