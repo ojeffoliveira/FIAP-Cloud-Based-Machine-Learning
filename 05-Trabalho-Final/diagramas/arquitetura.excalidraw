@@ -2736,9 +2736,9 @@
     {
       "id": "shield4",
       "type": "rectangle",
-      "x": 14.0,
+      "x": -10.0,
       "y": 582.0,
-      "width": 252,
+      "width": 300,
       "height": 40,
       "angle": 0,
       "strokeColor": "transparent",
@@ -2763,9 +2763,9 @@
     {
       "id": "txt5",
       "type": "text",
-      "x": 10.0,
+      "x": -15.0,
       "y": 582.0,
-      "width": 260,
+      "width": 310,
       "height": 64,
       "angle": 0,
       "strokeColor": "#495057",

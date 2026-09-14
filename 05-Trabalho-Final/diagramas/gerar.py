@@ -274,7 +274,7 @@ def montar(com_setas: bool):
 
     # ---- esquerda: dados e treino (linha da espinha, ySpine) ----
     dataset = d.no("data-table", "Dataset Bora Fibra\n(splits deterministicos, seed fixa)",
-                    xA, ySpine, lbl_w=260, escudo_w=252)
+                    xA, ySpine, lbl_w=310, escudo_w=300)
     s3dados = d.no("s3", "S3 - dataset\n(canais train/ e validation/)",
                     xB, ySpine, lbl_w=250, escudo_w=238)
     contrato = d.no("document", "Contrato de dados\n(schema + 7 features validadas)",
