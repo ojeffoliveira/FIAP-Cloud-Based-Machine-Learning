@@ -91,3 +91,13 @@ output "async_scalable_resource_id" {
 output "deploy_serving" {
   value = var.deploy_serving
 }
+
+output "dashboard_name" {
+  value = var.deploy_serving ? aws_cloudwatch_dashboard.serving[0].dashboard_name : ""
+}
+
+# O link pronto. É o que o `make dashboard` imprime, para o aluno não precisar
+# achar o painel pelo nome dentro do console.
+output "dashboard_url" {
+  value = var.deploy_serving ? "https://${var.region}.console.aws.amazon.com/cloudwatch/home?region=${var.region}#dashboards/dashboard/${local.dashboard_name}" : ""
+}

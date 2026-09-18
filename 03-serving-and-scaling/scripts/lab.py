@@ -245,6 +245,36 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# dashboard
+# --------------------------------------------------------------------------- #
+
+
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    outputs = aws.terraform_outputs()
+    nome = outputs.get("dashboard_name") or ""
+    url = outputs.get("dashboard_url") or ""
+    if not nome:
+        raise aws.AwsError("o painel só existe depois do `make apply` (estágio 2).")
+
+    # GetDashboard de verdade: imprimir um link que devolve 404 é pior que não
+    # imprimir nada, e a contagem de widgets confirma que o corpo subiu inteiro.
+    session = _session(args, cfg.region)
+    corpo = json.loads(aws.get_dashboard(session, nome)["DashboardBody"])
+    widgets = len(corpo.get("widgets", []))
+
+    log("")
+    log(f"  Painel  : {nome}")
+    log(f"  Widgets : {widgets}")
+    log("")
+    log("  Abra o link abaixo e DEIXE ABERTO durante o lab inteiro. Ele atualiza")
+    log("  sozinho conforme novas métricas chegam (granularidade de 60 s).")
+    log("")
+    print(url)
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # compare (real-time vs serverless)
 # --------------------------------------------------------------------------- #
 
@@ -558,6 +588,13 @@ def cmd_verify_clean(args: argparse.Namespace) -> int:
     checks["no_cloudwatch_alarms_for_prefix"] = len(alarms) == 0
     details["cloudwatch_alarms"] = [a["AlarmName"] for a in alarms]
 
+    # O painel não cobra nada, mas fica visível no console da conta e dá a
+    # impressão de que o lab continua no ar. Além disso, painel sobrando é sinal
+    # de destroy incompleto — vale como sintoma, não como custo.
+    dashboards = aws.dashboard_names(session, prefix)
+    checks["no_cloudwatch_dashboards_for_prefix"] = len(dashboards) == 0
+    details["cloudwatch_dashboards"] = dashboards
+
     try:
         s3.head_bucket(Bucket=bucket_name)
         bucket_exists = True
@@ -597,6 +634,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("validate-data", cmd_validate_data),
         ("wait-training", cmd_wait_training),
         ("status", cmd_status),
+        ("dashboard", cmd_dashboard),
         ("compare", cmd_compare),
         ("async", cmd_async),
         ("batch", cmd_batch),

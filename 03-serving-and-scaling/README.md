@@ -2,7 +2,7 @@
 
 Antes de começar, o setup do ambiente é o [Lab 01 - Setup e configuração de ambiente](../01-create-codespaces/README.md). O [Lab 02 - Do modelo ao sistema de Machine Learning](../02-ml-system/README.md) é a referência conceitual deste laboratório (o mesmo padrão de dois estágios, o mesmo jeito de ler o artefato pela API), mas este lab **não depende de nenhum arquivo runtime do Lab 02**: ele gera o próprio treino do zero.
 
-Todos os comandos rodam **no terminal do mesmo Codespaces** que você já usa desde o Lab 01. Não existe passo obrigatório de clicar no console da AWS.
+Todos os comandos rodam **no terminal do mesmo Codespaces** que você já usa desde o Lab 01. A partir do Passo 12.1 você também vai ler um painel do CloudWatch no navegador — mas ele é criado pelo Terraform junto com o resto, então nada neste laboratório é provisionado clicando no console.
 
 > [!WARNING]
 > **Pré-requisitos. Confira estes quatro itens antes de continuar:**
@@ -26,7 +26,7 @@ No Lab 02 você entregou **um** jeito de servir o modelo: um endpoint sempre lig
 
 ## O que você terá ao final
 
-Um único modelo servido por três endpoints simultâneos (real-time, serverless, async) mais um job de batch transform efêmero, com autoscaling real configurado e uma demonstração controlada de elasticidade 1→2→1 provada por API. Um dossiê em `artifacts/evidence/` documenta cada afirmação, e a conta termina limpa, comprovada por varredura de API.
+Um único modelo servido por três endpoints simultâneos (real-time, serverless, async) mais um job de batch transform efêmero, com autoscaling real configurado e uma demonstração controlada de elasticidade 1→2→1 provada por API. Um painel do CloudWatch, provisionado junto da infraestrutura, mostra os quatro padrões lado a lado enquanto você executa. Um dossiê em `artifacts/evidence/` documenta cada afirmação, e a conta termina limpa, comprovada por varredura de API.
 
 ### Arquitetura
 
@@ -43,10 +43,10 @@ Um único `model.tar.gz` sai do training job de bootstrap e alimenta quatro form
 |---|---|---|---|
 | [Parte 1 - Ambiente e portão de entrada](#parte-1---ambiente-e-portão-de-entrada) | Reabre o Codespaces, instala o que é específico deste lab, roda o portão de entrada. | [1](#passo-1) · [2](#passo-2) · [3](#passo-3) · [4](#passo-4) · [5](#passo-5) | ~10 min |
 | [Parte 2 - Um workload comum](#parte-2---um-workload-comum) | Gera o dataset e identifica os quatro contratos de workload. | [6](#passo-6) · [7](#passo-7) · [8](#passo-8) | ~10 min |
-| [Parte 3 - Um modelo, três formas de serving](#parte-3---um-modelo-três-formas-de-serving) | Sobe o bootstrap de treino e os três endpoints com um único comando. | [9](#passo-9) · [10](#passo-10) · [11](#passo-11) · [12](#passo-12) | ~15 min |
-| [Parte 4 - Síncrono persistente vs serverless](#parte-4---síncrono-persistente-vs-serverless) | Compara latência e comportamento entre real-time e serverless. | [13](#passo-13) · [14](#passo-14) | ~10 min |
-| [Parte 5 - Quando esperar é parte do contrato](#parte-5---quando-esperar-é-parte-do-contrato) | Roda async e batch, compara os dois. | [15](#passo-15) · [16](#passo-16) · [17](#passo-17) · [18](#passo-18) | ~15 min |
-| [Parte 6 - Concorrência e elasticidade](#parte-6---concorrência-e-elasticidade) | Load test e demonstração controlada de scaling 1→2→1. | [19](#passo-19) · [20](#passo-20) · [21](#passo-21) · [22](#passo-22) | ~15 min |
+| [Parte 3 - Um modelo, três formas de serving](#parte-3---um-modelo-três-formas-de-serving) | Sobe o bootstrap de treino e os três endpoints com um único comando, e abre o painel do lab. | [9](#passo-9) · [10](#passo-10) · [11](#passo-11) · [12](#passo-12) · [12.1](#passo-12-1) | ~18 min |
+| [Parte 4 - Síncrono persistente vs serverless](#parte-4---síncrono-persistente-vs-serverless) | Compara latência e comportamento entre real-time e serverless, no terminal e no painel. | [13](#passo-13) · [13.1](#passo-13-1) · [14](#passo-14) | ~13 min |
+| [Parte 5 - Quando esperar é parte do contrato](#parte-5---quando-esperar-é-parte-do-contrato) | Roda async e batch, compara os dois e vê a fila sendo drenada. | [15](#passo-15) · [16](#passo-16) · [16.1](#passo-16-1) · [17](#passo-17) · [17.1](#passo-17-1) · [18](#passo-18) | ~20 min |
+| [Parte 6 - Concorrência e elasticidade](#parte-6---concorrência-e-elasticidade) | Load test e demonstração controlada de scaling 1→2→1, com a curva desenhada. | [19](#passo-19) · [19.1](#passo-19-1) · [20](#passo-20) · [21](#passo-21) · [21.1](#passo-21-1) · [22](#passo-22) | ~20 min |
 | [Parte 7 - Dossiê e decisão](#parte-7---dossiê-e-decisão) | Consolida a evidência e escreve a recomendação para Helena. | [23](#passo-23) · [24](#passo-24) | ~10 min |
 | [Parte 8 - Encerramento obrigatório](#parte-8---encerramento-obrigatório) | Destrói tudo e prova por API que nada faturável sobrou. | [25](#passo-25) · [26](#passo-26) | ~10 min |
 
@@ -199,6 +199,7 @@ make help
 >   plan           Planeja o estágio atual
 >   apply          Provisiona storage + bootstrap de treino, portão, e então 3 endpoints + autoscaling
 >   status         Descreve endpoints, configs e scalable targets em JSON
+>   dashboard      Imprime o link direto do painel do CloudWatch deste laboratório
 >   compare        Smoke + latência da primeira chamada e das quentes, real-time vs serverless
 >   async          Sobe o payload para o S3, InvokeEndpointAsync, espera e valida a saída
 >   batch          CreateTransformJob para as 600 linhas de teste, espera e valida as 600 saídas
@@ -214,7 +215,7 @@ make help
 >   Manter recursos: make e2e KEEP_RESOURCES=1   (você precisa rodar make destroy depois)
 > ```
 
-São 19 comandos, e é a lista inteira do laboratório.
+São 21 comandos, e é a lista inteira do laboratório.
 
 <details>
 <summary><b>💡 Clique para entender: o que cada comando faz de verdade</b></summary>
@@ -232,6 +233,7 @@ São 19 comandos, e é a lista inteira do laboratório.
 | `make plan` | `validate-data` + `validate`, depois `terraform plan` | não cria recurso | mostra o que vai mudar |
 | `make apply` | stage 1 (S3 + training bootstrap) → portão (`DescribeTrainingJob` + `HeadObject`) → stage 2 (model + 3 endpoint configs/endpoints + autoscaling) | **sim** | o comando que sobe tudo, em um passo só |
 | `make status` | `DescribeEndpoint`/`DescribeEndpointConfig`/`DescribeScalableTargets` dos três modos | não, só leitura | inventário rápido do que está no ar |
+| `make dashboard` | `GetDashboard` no painel criado pelo estágio 2 e imprime o link direto | não, só leitura | o painel é a superfície visual do lab; você não precisa achar o nome dele no console |
 | `make compare` | 1 chamada + 20 chamadas warm, real-time e serverless, com o mesmo payload fixo | invocações pequenas | mede latência e prova que as predictions batem |
 | `make async` | sobe payload no S3, `InvokeEndpointAsync`, espera o output aparecer no S3 | sim, pequeno | prova o desacoplamento request/resposta |
 | `make batch` | `CreateTransformJob` via Boto3 nos 600 registros de teste | sim, efêmero | prova computação sem endpoint persistente |
@@ -718,11 +720,51 @@ Se preferir ver com os próprios olhos, abra o console do SageMaker em [Endpoint
 
 ![](img/05-console-endpoints.png)
 
+---
+
+<a id="passo-12-1"></a>
+
+**12.1. Abra o painel do laboratório e deixe a aba aberta**
+
+```bash
+cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling
+make dashboard
+```
+
+> Saída esperada:
+> ```text
+>   Painel  : prb-cloud-ml-lab2-serving
+>   Widgets : 10
+> ```
+
+O `make apply` criou, junto com os endpoints, um painel do CloudWatch com dez visualizações. Abra o link que o comando imprime e **deixe essa aba aberta até o fim do laboratório**: as linhas do painel acompanham as Partes 4, 5 e 6, e é nele que você vai comparar os padrões de serving em vez de somar números de cabeça.
+
+Agora ele está praticamente vazio, e isso é o comportamento correto: nenhuma chamada foi feita ainda, e métrica de endpoint só passa a existir depois que alguém invoca.
+
+> 📸 Print — capture o painel recém-aberto, com os widgets ainda sem série. Mostra que o painel nasce junto da infraestrutura e que o vazio inicial é esperado.
+<!-- ![](img/painel-vazio.png) -->
+
+<details>
+<summary><b>💡 Clique para entender: o que <code>make dashboard</code> faz por baixo dos panos</b></summary>
+<blockquote>
+
+O comando lê `dashboard_name` e `dashboard_url` dos outputs do Terraform, chama `GetDashboard` nesse nome e conta os widgets do corpo que voltou, antes de imprimir o link. Essa chamada existe para o comando não te entregar uma URL que abre em 404: se o painel não subiu, você descobre aqui, não no navegador.
+
+O painel é um recurso `aws_cloudwatch_dashboard` do Terraform, criado no estágio 2 junto dos endpoints e removido pelo `make destroy`. Ele não é montado à mão no console de propósito — assim todo mundo na sala lê exatamente o mesmo layout, e o `make verify-clean` consegue provar depois que ele não ficou para trás.
+
+Uma característica do serviço que vale saber antes de estranhar: a granularidade mínima de métrica é de 60 segundos e o console reconsulta em intervalo próprio. O painel é **tempo quase real**, não tempo real.
+
+📚 Documentação oficial: [Monitorar o Amazon SageMaker com o Amazon CloudWatch](https://docs.aws.amazon.com/sagemaker/latest/dg/monitoring-cloudwatch.html) — a tabela completa de métricas de endpoint, com a unidade de cada uma, inclusive as que este painel não usa.
+
+</blockquote>
+</details>
+
 ### Checkpoint
 
 - [x] `Apply complete!` nos dois estágios.
 - [x] `make status` mostra os três endpoints `InService`.
 - [x] O scalable target do real-time mostra `min=1, max=2`; o do async mostra `min=0, max=1`.
+- [x] `make dashboard` imprimiu o link e o painel abriu, com dez widgets ainda sem série.
 
 **A partir daqui existem dois recursos cobrando por hora na sua conta (real-time e, enquanto tiver capacidade > 0, async).** Se precisar interromper a aula, pule para a [Parte 8](#parte-8---encerramento-obrigatório) e rode `make destroy`.
 
@@ -781,6 +823,27 @@ Isso é esperado, não um bug: um endpoint serverless que não recebe chamada po
 
 </blockquote>
 </details>
+
+---
+
+<a id="passo-13-1"></a>
+
+**13.1. Leia a comparação de latência no painel**
+
+Volte à aba do painel e recarregue. Os dois widgets da **linha 1** são desta parte:
+
+| Widget | O que procurar |
+|---|---|
+| "Quem responde mais rápido, atendimento ou app?" | as duas séries em patamares próximos — depois de aquecido, o serverless anda junto com o real-time |
+| "Quanto custa não ter instância de pé?" | o overhead do serverless acima do overhead do real-time; é aqui que o custo da primeira chamada aparece |
+
+O segundo widget é o que responde a pergunta da Helena sem você precisar acreditar em nenhum número solto: `OverheadLatency` é o tempo que o SageMaker gasta **fora** do modelo, e no serverless ele carrega a preparação do ambiente. A latência do modelo em si é praticamente a mesma nos dois — é o mesmo artefato respondendo.
+
+> [!NOTE]
+> Você vai ver **um pico isolado**, não uma linha contínua. O `make compare` dispara 21 chamadas em poucos segundos e para; só um intervalo de 60 segundos tem dado. Um gráfico com um ponto só não é defeito do painel, é o formato do tráfego que você acabou de gerar.
+
+> 📸 Print — capture os dois widgets da linha 1 logo depois do `make compare`, com o pico visível nos dois. É a evidência visual de que o custo do serverless está no overhead, não no modelo.
+<!-- ![](img/painel-latencia.png) -->
 
 ---
 
@@ -871,6 +934,26 @@ A capacidade antes/depois é registrada como **observação**, não como critér
 
 ---
 
+<a id="passo-16-1"></a>
+
+**16.1. Veja a fila sendo drenada no painel**
+
+Recarregue o painel e olhe a **linha 2**, que é desta parte:
+
+| Widget | O que procurar |
+|---|---|
+| "A fila do assíncrono está sendo drenada?" | a barra de itens subindo quando o request entra e voltando a zero quando termina; a linha vermelha é a espera do item mais antigo, em segundos |
+| "Chegou trabalho sem instância para atender?" | um degrau em 1 se a sua chamada pegou o endpoint com capacidade zero |
+
+Este par de widgets é a razão de o assíncrono existir. No real-time a espera do cliente é a latência; aqui a espera é **fila**, e fila é uma coisa que se olha, não que se estima. Se o segundo widget marcou 1, você viu ao vivo a política `async-target-from-zero` fazendo o trabalho dela: chegou pedido, não havia máquina, e o endpoint subiu uma por causa desse sinal.
+
+Se o segundo widget ficou em zero o tempo todo, seu endpoint ainda estava com uma instância de pé quando você chamou — o que é igualmente correto e só significa que não houve espera por capacidade.
+
+> 📸 Print — capture a linha 2 com a fila já drenada (itens de volta a zero). Mostra a diferença entre "esperar porque é lento" e "esperar porque está na fila".
+<!-- ![](img/painel-fila.png) -->
+
+---
+
 <a id="passo-17"></a>
 
 **17. Rode o batch transform**
@@ -914,6 +997,34 @@ O Batch Transform provisiona a própria instância antes de processar, então os
 
 </blockquote>
 </details>
+
+---
+
+<a id="passo-17-1"></a>
+
+**17.1. Confirme no painel que a máquina do batch existiu e desapareceu**
+
+Ainda na **linha 2**, o widget mais à direita é "A máquina do batch existiu e desapareceu?".
+
+O que procurar é a **forma da curva**, não o valor: uma série que começa, dura alguns minutos e termina. Os três endpoints continuam de pé no painel; esta máquina não. É a diferença entre pagar por capacidade disponível e pagar por trabalho feito.
+
+A CPU vai aparecer baixa, e isso é honesto: 600 linhas não cansam uma instância. O que o widget prova é a **existência e o fim** do recurso, não que ele tenha se esforçado.
+
+<details>
+<summary><b>💡 Clique para entender: por que este widget precisa de uma busca em vez de um nome fixo</b></summary>
+<blockquote>
+
+Os outros widgets apontam para um endpoint por nome, e o nome do endpoint não muda durante o ciclo de vida do laboratório. O Batch Transform não tem endpoint: a métrica dele vive no namespace `/aws/sagemaker/TransformJobs`, com a dimensão `Host` no formato `<nome-do-job>/<instance-id>`. Esse nome carrega um timestamp e muda **a cada** `make batch`.
+
+Por isso o widget usa uma expressão `SEARCH` pelo prefixo do laboratório em vez de uma dimensão fixa: assim ele encontra o job da execução de hoje e continuaria encontrando o de amanhã, sem ninguém editar o Terraform entre uma execução e outra.
+
+📚 Documentação oficial: [Usar expressões de busca em gráficos](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/using-search-expressions.html) — a sintaxe completa do `SEARCH`, inclusive como restringir por namespace e por dimensão.
+
+</blockquote>
+</details>
+
+> 📸 Print — capture o widget do batch depois do job terminar, com a série já encerrada. É a prova visual de computação efêmera.
+<!-- ![](img/painel-batch.png) -->
 
 ---
 
@@ -971,6 +1082,21 @@ Para cada nível da matriz (concorrência 1/40 requests, 4/80, 8/120), o comando
 
 </blockquote>
 </details>
+
+---
+
+<a id="passo-19-1"></a>
+
+**19.1. Veja a carga se distribuindo no painel**
+
+Recarregue o painel e olhe o widget "A carga se distribuiu?", na **linha 3**.
+
+São duas séries: chamadas no total e chamadas por instância. Enquanto houver **uma** instância, as duas coincidem — a instância recebe tudo. A linha laranja é o alvo da política de scaling, e o ponto pedagógico é ver onde a série "por instância" está em relação a ela: é esse número, e não o total, que o Application Auto Scaling observa para decidir se precisa de mais uma máquina.
+
+É a diferença entre "o endpoint recebeu muita chamada" e "cada máquina está recebendo mais do que aguenta". A política reage à segunda pergunta.
+
+> 📸 Print — capture o widget durante ou logo após o `make load`, com o degrau de tráfego visível e as duas séries sobrepostas.
+<!-- ![](img/painel-distribuicao.png) -->
 
 ---
 
@@ -1034,6 +1160,24 @@ SageMaker provisiona/desprovisiona instância de verdade, não é instantâneo. 
 
 </blockquote>
 </details>
+
+---
+
+<a id="passo-21-1"></a>
+
+**21.1. Veja a elasticidade desenhada no painel**
+
+Este é o widget-âncora do laboratório: "Quantas instâncias o atendimento tem agora? (1 → 2 → 1)", na **linha 3**.
+
+O `make scale-demo` acabou de provar a subida e a volta por `DescribeEndpoint`, no terminal. Aqui você vê a mesma coisa como **forma**: a linha sai de 1, vai a 2 e volta a 1, com a linha cinza marcando o teto do autoscaling. Para levar essa evidência à Helena, um gráfico que sobe e desce vale mais que três linhas de log.
+
+> [!IMPORTANT]
+> O SageMaker **não publica** uma métrica de "número de instâncias". Esta linha é calculada: `Invocations ÷ InvocationsPerInstance` dá exatamente quantas instâncias atenderam a janela. A consequência é que **a linha só existe onde houve chamada** — janela sem tráfego não desenha ponto. Se você rodou o `scale-demo` sem tráfego nenhum, o widget pode ficar com buracos, e a prova da elasticidade continua sendo a saída do Passo 21. Para ver a curva completa, rode `make load` de novo enquanto o endpoint está com 2 instâncias.
+
+O widget "As instâncias estão de pé? (CPU %)", na linha 4, é o complemento: a CPU é métrica de host e existe enquanto a máquina existir, com ou sem tráfego. É lá que você confirma que o assíncrono realmente desligou quando a capacidade voltou a zero — a série simplesmente deixa de ter dado.
+
+> 📸 Print — capture o widget da contagem de instâncias com a curva 1 → 2 → 1 completa. É a imagem que resume a Parte 6.
+<!-- ![](img/painel-elasticidade.png) -->
 
 ---
 
@@ -1114,6 +1258,8 @@ code DECISION.md
 ```
 
 Termine as quatro seções de recomendação (uma por workload), a seção "Custo do erro" e "Condições que fariam a decisão mudar", usando os números reais de `artifacts/evidence/summary.md`.
+
+O painel continua aberto, e ele é a outra metade da evidência: o `summary.md` tem o número, o painel tem a forma. Para defender uma escolha diante de quem decide, a forma costuma convencer mais rápido — e as duas coisas vêm da mesma execução, então não há conflito entre elas.
 
 > [!TIP]
 > A seção mais valiosa é "Custo do erro". Escolher real-time para um workload esporádico não quebra nada tecnicamente, só infla a fatura. Escolher serverless para atendimento síncrono de alto volume não quebra nada tecnicamente — só empurra latência de cold start para o cliente errado.
@@ -1205,6 +1351,7 @@ make verify-clean
 >   [PASS] no_scalable_targets_for_prefix
 >   [PASS] no_scaling_policies_for_prefix
 >   [PASS] no_cloudwatch_alarms_for_prefix
+>   [PASS] no_cloudwatch_dashboards_for_prefix
 >   [PASS] no_lab_bucket
 >   [PASS] no_active_training_or_transform_jobs
 > [PASS] verificação de limpeza

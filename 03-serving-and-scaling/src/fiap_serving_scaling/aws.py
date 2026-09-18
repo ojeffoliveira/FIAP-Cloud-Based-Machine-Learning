@@ -171,6 +171,21 @@ def describe_endpoint_config(session: boto3.session.Session, name: str) -> dict[
     return client(session, "sagemaker").describe_endpoint_config(EndpointConfigName=name)
 
 
+def get_dashboard(session: boto3.session.Session, name: str) -> dict[str, Any]:
+    return client(session, "cloudwatch").get_dashboard(DashboardName=name)
+
+
+def dashboard_names(session: boto3.session.Session, prefix: str) -> list[str]:
+    # O verify-clean pergunta à API quais painéis existem com o prefixo, em vez de
+    # olhar o state: um painel apagado por fora, ou sobrando de um destroy
+    # interrompido, tem que aparecer do mesmo jeito.
+    paginator = client(session, "cloudwatch").get_paginator("list_dashboards")
+    nomes: list[str] = []
+    for page in paginator.paginate(DashboardNamePrefix=prefix):
+        nomes.extend(entry["DashboardName"] for entry in page.get("DashboardEntries", []))
+    return nomes
+
+
 def wait_endpoint_in_service(
     session: boto3.session.Session,
     endpoint_name: str,

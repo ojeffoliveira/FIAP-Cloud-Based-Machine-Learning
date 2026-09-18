@@ -68,6 +68,9 @@ apply: validate-data validate ## Provisiona storage + bootstrap de treino, port�
 status: ## Descreve endpoints, configs e scalable targets em JSON
 	@$(PYTHON) $(SCRIPTS)/lab.py status
 
+dashboard: ## Imprime o link direto do painel do CloudWatch deste laboratório
+	@$(PYTHON) $(SCRIPTS)/lab.py dashboard
+
 compare: ## Smoke + latência da primeira chamada e das quentes, real-time vs serverless
 	@$(PYTHON) $(SCRIPTS)/lab.py compare
 

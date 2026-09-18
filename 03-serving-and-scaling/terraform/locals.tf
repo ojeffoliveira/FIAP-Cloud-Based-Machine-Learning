@@ -27,6 +27,12 @@ locals {
   realtime_scaling_policy_name = "${var.project_prefix}-rt-target"
   async_scaling_policy_name    = "${var.project_prefix}-async-target"
 
+  # Sem o sufixo do ciclo de vida, ao contrário dos endpoints: o dashboard não é
+  # um recurso que o SageMaker recuse recriar com o mesmo nome, e um nome estável
+  # é o que permite o `verify-clean` achá-lo só pelo prefixo, do mesmo jeito que
+  # ele acha o bucket.
+  dashboard_name = "${var.project_prefix}-serving"
+
   data_dir = "${path.module}/${var.data_dir}"
 
   s3_prefixes = {
