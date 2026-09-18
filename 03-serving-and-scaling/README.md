@@ -758,7 +758,18 @@ A última linha é o link: clique nela (ou copie e cole no navegador). O `make a
 
 Agora ele está praticamente vazio, e isso é o comportamento correto: nenhuma chamada foi feita ainda, e métrica de endpoint só passa a existir depois que alguém invoca.
 
-> 📸 Print — capture o painel recém-aberto, com os widgets ainda sem série. Mostra que o painel nasce junto da infraestrutura e que o vazio inicial é esperado.
+O painel tem quatro linhas, e você vai ler uma por Parte:
+
+| Linha | Quando você lê | Gráficos |
+|---|---|---|
+| 1 | Parte 4, no Passo 13.1 | latência do modelo · overhead da plataforma |
+| 2 | Parte 5, nos Passos 16.1 e 17.1 | fila do assíncrono · fila sem capacidade · máquina do batch |
+| 3 | Parte 6, nos Passos 19.1 e 21.1 | contagem de instâncias · carga total e por instância |
+| 4 | quando quiser, vale para o lab inteiro | chamadas que falharam · teto de concorrência do serverless · CPU das instâncias |
+
+A linha 4 é a de saúde e não tem passo próprio: ela existe para você conferir, em qualquer momento, que nada está falhando por trás dos números que está lendo. Se o widget "Alguma chamada falhou?" sair de zero em qualquer ponto do laboratório, pare e investigue antes de seguir — os números das outras linhas passam a não significar o que você acha.
+
+> 📸 **Nota do autor (não é tarefa sua)** — capturar o painel recém-aberto, com os widgets ainda sem série. Mostra que o painel nasce junto da infraestrutura e que o vazio inicial é esperado.
 <!-- ![](img/painel-vazio.png) -->
 
 <details>
@@ -860,7 +871,7 @@ Se as duas linhas de overhead estiverem quase coladas, seu serverless provavelme
 
 **Você vai ver um pico isolado, não uma linha contínua.** O `make compare` dispara 21 chamadas em poucos segundos e para; só um intervalo de 60 segundos tem dado. Um gráfico com um ponto só não é defeito do painel, é o formato do tráfego que você acabou de gerar.
 
-> 📸 Print — capture os dois widgets da linha 1 logo depois do `make compare`, com o pico visível nos dois. É a evidência visual de que o custo do serverless está no overhead, não no modelo.
+> 📸 **Nota do autor (não é tarefa sua)** — capturar os dois widgets da linha 1 logo depois do `make compare`, com o pico visível nos dois. É a evidência visual de que o custo do serverless está no overhead, não no modelo.
 <!-- ![](img/painel-latencia.png) -->
 
 ---
@@ -969,7 +980,7 @@ Este par de widgets é a razão de o assíncrono existir. No real-time a espera 
 
 Se o segundo widget ficou em zero o tempo todo, seu endpoint ainda estava com uma instância de pé quando você chamou — o que é igualmente correto e só significa que não houve espera por capacidade.
 
-> 📸 Print — capture a linha 2 com a fila já drenada (itens de volta a zero). Mostra a diferença entre "esperar porque é lento" e "esperar porque está na fila".
+> 📸 **Nota do autor (não é tarefa sua)** — capturar a linha 2 com a fila já drenada (itens de volta a zero). Mostra a diferença entre "esperar porque é lento" e "esperar porque está na fila".
 <!-- ![](img/painel-fila.png) -->
 
 ---
@@ -1045,7 +1056,7 @@ Por isso o widget usa uma expressão `SEARCH` pelo prefixo do laboratório em ve
 </blockquote>
 </details>
 
-> 📸 Print — capture o widget do batch depois do job terminar, com a série já encerrada. É a prova visual de computação efêmera.
+> 📸 **Nota do autor (não é tarefa sua)** — capturar o widget do batch depois do job terminar, com a série já encerrada. É a prova visual de computação efêmera.
 <!-- ![](img/painel-batch.png) -->
 
 ---
@@ -1121,7 +1132,7 @@ Não é defeito. Uma política de target tracking reage a violação **sustentad
 
 Se o widget estiver vazio logo depois do comando, recarregue depois de um ou dois minutos: a métrica é publicada com atraso próprio.
 
-> 📸 Print — capture o widget logo após o `make load`, com o pico de tráfego passando acima da linha laranja do alvo e as duas séries ainda sobrepostas. É a imagem que explica por que o Passo 21 precisa forçar o scale-out.
+> 📸 **Nota do autor (não é tarefa sua)** — capturar o widget logo após o `make load`, com o pico de tráfego passando acima da linha laranja do alvo e as duas séries ainda sobrepostas. É a imagem que explica por que o Passo 21 precisa forçar o scale-out.
 <!-- ![](img/painel-distribuicao.png) -->
 
 ---
@@ -1215,7 +1226,7 @@ A primeira versão deste painel calculava a contagem de outra forma, dividindo `
 </blockquote>
 </details>
 
-> 📸 Print — capture o widget da contagem de instâncias com a curva 1 → 2 → 1 completa. É a imagem que resume a Parte 6.
+> 📸 **Nota do autor (não é tarefa sua)** — capturar o widget da contagem de instâncias com a curva 1 → 2 → 1 completa. É a imagem que resume a Parte 6.
 <!-- ![](img/painel-elasticidade.png) -->
 
 ---
@@ -1468,6 +1479,9 @@ O laboratório **04 - ML Operations** continua desta arquitetura e ataca observa
 | **`SageMakerVariantInvocationsPerInstance`** | métrica usada pelo target tracking do real-time |
 | **`ApproximateBacklogSizePerInstance`** | métrica usada pelo target tracking do async |
 | **`HasBacklogWithoutCapacity`** | alarme do CloudWatch que dispara o scale-from-zero do async |
+| **`ModelLatency`** | tempo que o modelo leva para responder, medido dentro do contêiner |
+| **`OverheadLatency`** | tempo que o SageMaker gasta **fora** do modelo (roteamento e, no serverless, preparação do ambiente) |
+| **`CPUUtilization`** | métrica de host: cada instância de pé publica um ponto por minuto, com ou sem chamada |
 | **p50 / p95 / p99** | percentis de latência: 50%, 95% e 99% das chamadas responderam em até esse tempo |
 | **RPS** | requests por segundo, medida de throughput |
 | **`LabRole`** | role pré-existente do AWS Academy que o SageMaker assume |
