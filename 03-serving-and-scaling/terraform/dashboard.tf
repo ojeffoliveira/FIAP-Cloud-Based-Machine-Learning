@@ -21,15 +21,16 @@
 # Duas honestidades registradas aqui para ninguém prometer ao aluno o que o
 # serviço não entrega:
 #
-# 1. O SageMaker NÃO publica uma métrica de "número de instâncias". A linha da
-#    elasticidade é calculada: `Invocations / InvocationsPerInstance` é
-#    exatamente a contagem de instâncias que atenderam a janela. Verificado por
-#    `get-metric-data` contra o endpoint real (devolveu 1.0 com uma instância).
-#    Consequência que o README precisa dizer: a conta só existe onde houve
-#    chamada. Janela sem tráfego não desenha ponto, e isso não é defeito do
-#    painel — é a definição da métrica.
+# 1. O SageMaker NÃO publica uma métrica de "número de instâncias". A contagem
+#    sai do SampleCount de `CPUUtilization`, que é métrica de host: uma instância
+#    de pé publica um ponto por minuto mesmo sem receber chamada. Verificado
+#    contra `DescribeEndpoint` durante um scale-demo real. Ver o comentário no
+#    widget para o motivo de NÃO usar `Invocations / InvocationsPerInstance`,
+#    que foi a primeira tentativa.
 # 2. `ModelSetupTime` não aparece para estes endpoints. Quem conta a história do
-#    custo de subir instância é `OverheadLatency`, que existe nos dois padrões.
+#    custo de subir instância é `OverheadLatency`, que existe nos dois padrões —
+#    e a diferença medida é grande: dezenas de milissegundos no real-time contra
+#    centenas no serverless, com `ModelLatency` praticamente igual nos dois.
 #
 # A granularidade mínima é 60 s e o console reconsulta em intervalo próprio: isto
 # é tempo QUASE real, e o README nunca promete tempo real absoluto.
@@ -191,12 +192,30 @@ resource "aws_cloudwatch_dashboard" "serving" {
         height = 6
         properties = {
           # O widget-âncora do lab: a elasticidade 1 -> 2 -> 1 desenhada.
-          # A contagem é calculada porque o serviço não publica a métrica; ver a
-          # honestidade (1) no topo deste arquivo.
+          #
+          # O SageMaker não publica contagem de instâncias. A primeira versão
+          # deste widget calculava `Invocations / InvocationsPerInstance`, que é
+          # aritmeticamente exato — e inútil aqui: o `make scale-demo` sobe a
+          # capacidade SEM gerar tráfego, então a divisão não tinha dado
+          # justamente no minuto da curva, e o widget ficava vazio no momento que
+          # ele existe para mostrar.
+          #
+          # `CPUUtilization` é métrica de host: cada instância publica um ponto
+          # por minuto enquanto estiver de pé, com ou sem chamada. Logo o
+          # SampleCount do minuto É a quantidade de instâncias que reportaram.
+          # Medido contra a API durante um scale-demo real: SampleCount seguiu
+          # 1 -> 2 -> 1 junto com `CurrentInstanceCount`.
+          #
+          # O preço, também medido: o degrau sai mais LARGO do que a realidade.
+          # A janela real com duas instâncias foi de ~45 s e o SampleCount marcou
+          # 2 por cerca de quatro minutos — a instância que sai continua
+          # publicando por um tempo. Para o objetivo do widget (mostrar que subiu
+          # e voltou) isso ajuda; para cronometrar, a fonte é `DescribeEndpoint`,
+          # e o README diz isso no passo.
           title  = "Quantas instâncias o atendimento tem agora? (1 → 2 → 1)"
           view   = "timeSeries"
           region = var.region
-          stat   = "Sum"
+          stat   = "SampleCount"
           period = 60
           yAxis  = { left = { label = "instâncias", showUnits = false, min = 0 } }
           annotations = {
@@ -207,9 +226,7 @@ resource "aws_cloudwatch_dashboard" "serving" {
             }]
           }
           metrics = [
-            [{ expression = "m1/m2", label = "Instâncias atendendo", id = "e1", color = "#2ca02c" }],
-            ["AWS/SageMaker", "Invocations", "EndpointName", local.realtime_endpoint_name, "VariantName", "AllTraffic", { id = "m1", visible = false }],
-            ["AWS/SageMaker", "InvocationsPerInstance", "EndpointName", local.realtime_endpoint_name, "VariantName", "AllTraffic", { id = "m2", visible = false }],
+            ["/aws/sagemaker/Endpoints", "CPUUtilization", "EndpointName", local.realtime_endpoint_name, "VariantName", "AllTraffic", { label = "Instâncias de pé", color = "#2ca02c" }],
           ]
         }
       },

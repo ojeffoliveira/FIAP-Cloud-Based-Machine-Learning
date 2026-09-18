@@ -1,5 +1,17 @@
 # 03 - Serving and Scaling
 
+<!--
+CONVENÇÃO DE PRINTS DESTE README (nota para o professor, não aparece renderizada)
+
+Este laboratório é executado em aula e não tem entrega em zip, então print NUNCA é
+tarefa do aluno: é imagem que o autor captura ao validar o lab de ponta a ponta e
+embute no README, para o aluno comparar a tela dele com a que deveria aparecer.
+
+Cada bloco "> 📸 Print" abaixo marca o lugar exato onde a imagem entra, com o que
+capturar e o que aquela imagem prova. Depois de salvar o arquivo em `img/`, troque
+o bloco inteiro pela linha de imagem que está comentada logo abaixo dele.
+-->
+
 Antes de começar, o setup do ambiente é o [Lab 01 - Setup e configuração de ambiente](../01-create-codespaces/README.md). O [Lab 02 - Do modelo ao sistema de Machine Learning](../02-ml-system/README.md) é a referência conceitual deste laboratório (o mesmo padrão de dois estágios, o mesmo jeito de ler o artefato pela API), mas este lab **não depende de nenhum arquivo runtime do Lab 02**: ele gera o próprio treino do zero.
 
 Todos os comandos rodam **no terminal do mesmo Codespaces** que você já usa desde o Lab 01. A partir do Passo 12.1 você também vai ler um painel do CloudWatch no navegador — mas ele é criado pelo Terraform junto com o resto, então nada neste laboratório é provisionado clicando no console.
@@ -731,13 +743,18 @@ cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling
 make dashboard
 ```
 
-> Saída esperada:
+> Saída esperada (o link é o seu; o nome do painel é igual para todo mundo):
 > ```text
 >   Painel  : prb-cloud-ml-lab2-serving
->   Widgets : 10
+>   Widgets : 11
+>
+>   Abra o link abaixo e DEIXE ABERTO durante o lab inteiro. Ele atualiza
+>   sozinho conforme novas métricas chegam (granularidade de 60 s).
+>
+> https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/prb-cloud-ml-lab2-serving
 > ```
 
-O `make apply` criou, junto com os endpoints, um painel do CloudWatch com dez visualizações. Abra o link que o comando imprime e **deixe essa aba aberta até o fim do laboratório**: as linhas do painel acompanham as Partes 4, 5 e 6, e é nele que você vai comparar os padrões de serving em vez de somar números de cabeça.
+A última linha é o link: clique nela (ou copie e cole no navegador). O `make apply` criou o painel junto com os endpoints, e são onze widgets — dez gráficos e um cabeçalho com a ordem de leitura. **Deixe essa aba aberta até o fim do laboratório**: as linhas do painel acompanham as Partes 4, 5 e 6, e é nele que você vai comparar os padrões de serving em vez de somar números de cabeça.
 
 Agora ele está praticamente vazio, e isso é o comportamento correto: nenhuma chamada foi feita ainda, e métrica de endpoint só passa a existir depois que alguém invoca.
 
@@ -764,7 +781,7 @@ Uma característica do serviço que vale saber antes de estranhar: a granularida
 - [x] `Apply complete!` nos dois estágios.
 - [x] `make status` mostra os três endpoints `InService`.
 - [x] O scalable target do real-time mostra `min=1, max=2`; o do async mostra `min=0, max=1`.
-- [x] `make dashboard` imprimiu o link e o painel abriu, com dez widgets ainda sem série.
+- [x] `make dashboard` imprimiu o link e o painel abriu, com os gráficos ainda sem série.
 
 **A partir daqui existem dois recursos cobrando por hora na sua conta (real-time e, enquanto tiver capacidade > 0, async).** Se precisar interromper a aula, pule para a [Parte 8](#parte-8---encerramento-obrigatório) e rode `make destroy`.
 
@@ -834,13 +851,14 @@ Volte à aba do painel e recarregue. Os dois widgets da **linha 1** são desta p
 
 | Widget | O que procurar |
 |---|---|
-| "Quem responde mais rápido, atendimento ou app?" | as duas séries em patamares próximos — depois de aquecido, o serverless anda junto com o real-time |
-| "Quanto custa não ter instância de pé?" | o overhead do serverless acima do overhead do real-time; é aqui que o custo da primeira chamada aparece |
+| "Quem responde mais rápido, atendimento ou app?" | as duas séries quase coladas, ambas na casa de poucos milissegundos — é o mesmo artefato respondendo, então o modelo custa o mesmo nos dois |
+| "Quanto custa não ter instância de pé?" | a série do serverless **várias vezes mais alta** que a do real-time, com separação visível sem esforço |
 
-O segundo widget é o que responde a pergunta da Helena sem você precisar acreditar em nenhum número solto: `OverheadLatency` é o tempo que o SageMaker gasta **fora** do modelo, e no serverless ele carrega a preparação do ambiente. A latência do modelo em si é praticamente a mesma nos dois — é o mesmo artefato respondendo.
+O contraste entre os dois widgets é a resposta para a Helena. O modelo custa o mesmo nos dois padrões; o que difere é o `OverheadLatency`, o tempo que o SageMaker gasta **fora** do modelo, e no serverless ele carrega a preparação do ambiente. Numa execução real medimos latência de modelo na casa de 4 a 6 ms nos dois, e overhead de aproximadamente 40 a 55 ms no real-time contra cerca de 380 ms no serverless — os valores variam por execução, mas a ordem de grandeza da diferença não.
 
-> [!NOTE]
-> Você vai ver **um pico isolado**, não uma linha contínua. O `make compare` dispara 21 chamadas em poucos segundos e para; só um intervalo de 60 segundos tem dado. Um gráfico com um ponto só não é defeito do painel, é o formato do tráfego que você acabou de gerar.
+Se as duas linhas de overhead estiverem quase coladas, seu serverless provavelmente continuava aquecido de uma execução anterior. Espere alguns minutos sem chamá-lo e rode `make compare` de novo.
+
+**Você vai ver um pico isolado, não uma linha contínua.** O `make compare` dispara 21 chamadas em poucos segundos e para; só um intervalo de 60 segundos tem dado. Um gráfico com um ponto só não é defeito do painel, é o formato do tráfego que você acabou de gerar.
 
 > 📸 Print — capture os dois widgets da linha 1 logo depois do `make compare`, com o pico visível nos dois. É a evidência visual de que o custo do serverless está no overhead, não no modelo.
 <!-- ![](img/painel-latencia.png) -->
@@ -942,8 +960,10 @@ Recarregue o painel e olhe a **linha 2**, que é desta parte:
 
 | Widget | O que procurar |
 |---|---|
-| "A fila do assíncrono está sendo drenada?" | a barra de itens subindo quando o request entra e voltando a zero quando termina; a linha vermelha é a espera do item mais antigo, em segundos |
+| "A fila do assíncrono está sendo drenada?" | o ciclo completo já registrado: os itens subindo quando o request entrou e voltando a zero quando terminou; a linha vermelha é a espera do item mais antigo, em segundos |
 | "Chegou trabalho sem instância para atender?" | um degrau em 1 se a sua chamada pegou o endpoint com capacidade zero |
+
+O `make async` do Passo 15 já terminou, então você não vê isso em movimento: vê o histórico dos últimos minutos, com a subida e a queda já desenhadas. Se o gráfico estiver completamente vazio, recarregue depois de um ou dois minutos antes de suspeitar de erro — a publicação da métrica tem atraso próprio.
 
 Este par de widgets é a razão de o assíncrono existir. No real-time a espera do cliente é a latência; aqui a espera é **fila**, e fila é uma coisa que se olha, não que se estima. Se o segundo widget marcou 1, você viu ao vivo a política `async-target-from-zero` fazendo o trabalho dela: chegou pedido, não havia máquina, e o endpoint subiu uma por causa desse sinal.
 
@@ -1009,6 +1029,8 @@ Ainda na **linha 2**, o widget mais à direita é "A máquina do batch existiu e
 O que procurar é a **forma da curva**, não o valor: uma série que começa, dura alguns minutos e termina. Os três endpoints continuam de pé no painel; esta máquina não. É a diferença entre pagar por capacidade disponível e pagar por trabalho feito.
 
 A CPU vai aparecer baixa, e isso é honesto: 600 linhas não cansam uma instância. O que o widget prova é a **existência e o fim** do recurso, não que ele tenha se esforçado.
+
+Se o widget estiver completamente vazio logo depois do job terminar, recarregue depois de um ou dois minutos: a métrica de transform job é publicada com atraso, e vazio nos primeiros instantes não significa que algo falhou.
 
 <details>
 <summary><b>💡 Clique para entender: por que este widget precisa de uma busca em vez de um nome fixo</b></summary>
@@ -1091,11 +1113,15 @@ Para cada nível da matriz (concorrência 1/40 requests, 4/80, 8/120), o comando
 
 Recarregue o painel e olhe o widget "A carga se distribuiu?", na **linha 3**.
 
-São duas séries: chamadas no total e chamadas por instância. Enquanto houver **uma** instância, as duas coincidem — a instância recebe tudo. A linha laranja é o alvo da política de scaling, e o ponto pedagógico é ver onde a série "por instância" está em relação a ela: é esse número, e não o total, que o Application Auto Scaling observa para decidir se precisa de mais uma máquina.
+São duas séries: chamadas no total e chamadas por instância. Enquanto houver **uma** instância, as duas ficam exatamente em cima uma da outra — a instância recebe tudo. É isso que você deve ver.
 
-É a diferença entre "o endpoint recebeu muita chamada" e "cada máquina está recebendo mais do que aguenta". A política reage à segunda pergunta.
+A linha laranja é o alvo da política de scaling. O que procurar aqui é contraintuitivo: **a série vai ultrapassar o alvo, e a política não vai reagir.** Numa execução real a série chegou a 226 chamadas em um minuto, contra um alvo de 60 por instância, e o endpoint continuou com uma máquina.
 
-> 📸 Print — capture o widget durante ou logo após o `make load`, com o degrau de tráfego visível e as duas séries sobrepostas.
+Não é defeito. Uma política de target tracking reage a violação **sustentada**, não a um pico: o alarme por trás dela precisa de vários minutos acima do alvo antes de disparar, e o `make load` inteiro dura cerca de um minuto. Guarde essa observação, porque ela é exatamente o motivo de o Passo 21 forçar o scale-out em vez de esperar o tráfego provocá-lo.
+
+Se o widget estiver vazio logo depois do comando, recarregue depois de um ou dois minutos: a métrica é publicada com atraso próprio.
+
+> 📸 Print — capture o widget logo após o `make load`, com o pico de tráfego passando acima da linha laranja do alvo e as duas séries ainda sobrepostas. É a imagem que explica por que o Passo 21 precisa forçar o scale-out.
 <!-- ![](img/painel-distribuicao.png) -->
 
 ---
@@ -1172,9 +1198,22 @@ Este é o widget-âncora do laboratório: "Quantas instâncias o atendimento tem
 O `make scale-demo` acabou de provar a subida e a volta por `DescribeEndpoint`, no terminal. Aqui você vê a mesma coisa como **forma**: a linha sai de 1, vai a 2 e volta a 1, com a linha cinza marcando o teto do autoscaling. Para levar essa evidência à Helena, um gráfico que sobe e desce vale mais que três linhas de log.
 
 > [!IMPORTANT]
-> O SageMaker **não publica** uma métrica de "número de instâncias". Esta linha é calculada: `Invocations ÷ InvocationsPerInstance` dá exatamente quantas instâncias atenderam a janela. A consequência é que **a linha só existe onde houve chamada** — janela sem tráfego não desenha ponto. Se você rodou o `scale-demo` sem tráfego nenhum, o widget pode ficar com buracos, e a prova da elasticidade continua sendo a saída do Passo 21. Para ver a curva completa, rode `make load` de novo enquanto o endpoint está com 2 instâncias.
+> Espere **cerca de um minuto** depois do comando terminar antes de recarregar. E não espere precisão de cronômetro: a janela real com duas instâncias dura pouco de propósito (numa execução medimos cerca de 45 segundos), mas a métrica tem granularidade de 60 segundos e a instância que sai continua reportando por alguns minutos — então o degrau no gráfico aparece mais largo do que foi, e demora alguns minutos para voltar a 1. O gráfico conta a história certa; o cronômetro exato é a saída do Passo 21, no seu terminal.
 
-O widget "As instâncias estão de pé? (CPU %)", na linha 4, é o complemento: a CPU é métrica de host e existe enquanto a máquina existir, com ou sem tráfego. É lá que você confirma que o assíncrono realmente desligou quando a capacidade voltou a zero — a série simplesmente deixa de ter dado.
+O widget "As instâncias estão de pé? (CPU %)", na linha 4, é o complemento: é lá que você confirma que o assíncrono realmente desligou quando a capacidade voltou a zero — a série simplesmente deixa de ter dado.
+
+<details>
+<summary><b>💡 Clique para entender: de onde sai a contagem de instâncias, se o SageMaker não publica essa métrica</b></summary>
+<blockquote>
+
+Não existe métrica "número de instâncias" no SageMaker. O que existe é `CPUUtilization` no namespace `/aws/sagemaker/Endpoints`, que é métrica de **host**: cada instância de pé publica um ponto por minuto, receba chamada ou não. O widget usa a estatística `SampleCount` dessa métrica — ou seja, conta **quantos pontos chegaram** no minuto, que é o mesmo que contar quantas instâncias estavam vivas.
+
+A primeira versão deste painel calculava a contagem de outra forma, dividindo `Invocations` por `InvocationsPerInstance`. A divisão é aritmeticamente exata, e foi descartada por um motivo prático: o `make scale-demo` sobe a capacidade **sem gerar tráfego**, então a divisão não tinha dado justamente no minuto da curva. O widget ficava vazio no momento em que ele existe para mostrar.
+
+📚 Documentação oficial: [Estatísticas do CloudWatch](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Statistics-definitions.html) — a definição de `SampleCount` e das outras estatísticas, e por que a escolha da estatística muda o que o mesmo gráfico significa.
+
+</blockquote>
+</details>
 
 > 📸 Print — capture o widget da contagem de instâncias com a curva 1 → 2 → 1 completa. É a imagem que resume a Parte 6.
 <!-- ![](img/painel-elasticidade.png) -->
@@ -1259,7 +1298,16 @@ code DECISION.md
 
 Termine as quatro seções de recomendação (uma por workload), a seção "Custo do erro" e "Condições que fariam a decisão mudar", usando os números reais de `artifacts/evidence/summary.md`.
 
-O painel continua aberto, e ele é a outra metade da evidência: o `summary.md` tem o número, o painel tem a forma. Para defender uma escolha diante de quem decide, a forma costuma convencer mais rápido — e as duas coisas vêm da mesma execução, então não há conflito entre elas.
+O painel continua aberto, e ele é a outra metade da evidência: o `summary.md` tem o número, o painel tem a forma. Use os dois — para cada linha da tabela de evidências do `DECISION.md`, o widget correspondente é:
+
+| Linha da tabela | Widget que sustenta o argumento |
+|---|---|
+| Atendimento humano | "Quem responde mais rápido" e "Quanto custa não ter instância de pé" |
+| App após fechamento da fatura | os mesmos dois, lendo a série do serverless |
+| Importação de arquivo pesado | "A fila do assíncrono está sendo drenada?" |
+| Campanha noturna | "A máquina do batch existiu e desapareceu?" |
+
+Para defender uma escolha diante de quem decide, a forma costuma convencer mais rápido que a tabela — e as duas coisas vêm da mesma execução, então não há conflito entre elas.
 
 > [!TIP]
 > A seção mais valiosa é "Custo do erro". Escolher real-time para um workload esporádico não quebra nada tecnicamente, só infla a fatura. Escolher serverless para atendimento síncrono de alto volume não quebra nada tecnicamente — só empurra latência de cold start para o cliente errado.
