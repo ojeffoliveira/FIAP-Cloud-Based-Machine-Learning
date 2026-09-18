@@ -289,14 +289,27 @@ resource "aws_cloudwatch_dashboard" "serving" {
         properties = {
           # O serverless não tem instância para medir CPU; o teto dele é
           # concorrência. Esta é a métrica equivalente a "está apertado?".
+          #
+          # A métrica vem como FRAÇÃO, não como porcentagem: medimos 0.2 com
+          # `serverless_max_concurrency = 5` e um chamador sequencial, ou seja um
+          # quinto do teto. Sem o `*100` o eixo rotulado "%" mostraria "0,2%" para
+          # uma ocupação de 20% — errado por duas ordens de grandeza.
           title  = "O app está perto do teto de concorrência? (%)"
           view   = "timeSeries"
           region = var.region
           stat   = "Maximum"
           period = 60
-          yAxis  = { left = { label = "%", showUnits = false, min = 0 } }
+          yAxis  = { left = { label = "% do teto", showUnits = false, min = 0 } }
+          annotations = {
+            horizontal = [{
+              label = "teto (${var.serverless_max_concurrency} execuções simultâneas)"
+              value = 100
+              color = "#7f7f7f"
+            }]
+          }
           metrics = [
-            ["AWS/SageMaker", "ServerlessConcurrentExecutionsUtilization", "EndpointName", local.serverless_endpoint_name, "VariantName", "AllTraffic", { label = "Uso da concorrência", color = "#ff7f0e" }],
+            [{ expression = "m1*100", label = "Uso da concorrência", id = "e1", color = "#ff7f0e" }],
+            ["AWS/SageMaker", "ServerlessConcurrentExecutionsUtilization", "EndpointName", local.serverless_endpoint_name, "VariantName", "AllTraffic", { id = "m1", visible = false }],
           ]
         }
       },

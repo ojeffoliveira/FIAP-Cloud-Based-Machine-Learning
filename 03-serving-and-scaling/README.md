@@ -864,6 +864,9 @@ Volte à aba do painel e recarregue. Os dois widgets da **linha 1** são desta p
 |---|---|
 | "Quem responde mais rápido, atendimento ou app?" | as duas séries quase coladas, ambas na casa de poucos milissegundos — é o mesmo artefato respondendo, então o modelo custa o mesmo nos dois |
 | "Quanto custa não ter instância de pé?" | a série do serverless **várias vezes mais alta** que a do real-time, com separação visível sem esforço |
+| "O app está perto do teto de concorrência? (%)" (linha 4) | um valor **baixo**, bem longe dos 100% — na casa de 20% numa execução real |
+
+O terceiro widget responde uma pergunta que a linha 1 não responde: sobrou folga? Este laboratório configura o serverless com teto de **cinco execuções simultâneas**, e tanto o `compare` quanto o `load` chamam o endpoint uma de cada vez. Então o esperado é ocupação baixa: o serverless aqui nunca fica apertado, e a limitação que ele impõe ao app é a **primeira chamada**, não o teto de concorrência. É uma distinção que vale levar para o `DECISION.md`.
 
 O contraste entre os dois widgets é a resposta para a Helena. O modelo custa o mesmo nos dois padrões; o que difere é o `OverheadLatency`, o tempo que o SageMaker gasta **fora** do modelo, e no serverless ele carrega a preparação do ambiente. Numa execução real medimos latência de modelo na casa de 4 a 6 ms nos dois, e overhead de aproximadamente 40 a 55 ms no real-time contra cerca de 380 ms no serverless — os valores variam por execução, mas a ordem de grandeza da diferença não.
 
@@ -890,6 +893,7 @@ Com `artifacts/evidence/compare.json` aberto ao lado, responda na linha "Atendim
 ### Checkpoint
 
 - [x] `predictions_match=True` no `compare.json`.
+- [x] No painel, a linha 1 mostra o overhead do serverless acima do do real-time.
 - [x] Você registrou latência real-time vs. serverless no `DECISION.md`.
 
 ---
@@ -1076,6 +1080,7 @@ Preencha as linhas "Importação de arquivo pesado" e "Campanha noturna" na tabe
 
 - [x] `async.json`: `output_count == input_count` (50).
 - [x] `batch.json`: `output_count == 600`, `status == Completed`.
+- [x] No painel, a linha 2 mostra a fila voltando a zero e a máquina do batch já encerrada.
 - [x] Você comparou os dois no `DECISION.md`.
 
 ---
@@ -1209,7 +1214,7 @@ Este é o widget-âncora do laboratório: "Quantas instâncias o atendimento tem
 O `make scale-demo` acabou de provar a subida e a volta por `DescribeEndpoint`, no terminal. Aqui você vê a mesma coisa como **forma**: a linha sai de 1, vai a 2 e volta a 1, com a linha cinza marcando o teto do autoscaling. Para levar essa evidência à Helena, um gráfico que sobe e desce vale mais que três linhas de log.
 
 > [!IMPORTANT]
-> Espere **cerca de um minuto** depois do comando terminar antes de recarregar. E não espere precisão de cronômetro: a janela real com duas instâncias dura pouco de propósito (numa execução medimos cerca de 45 segundos), mas a métrica tem granularidade de 60 segundos e a instância que sai continua reportando por alguns minutos — então o degrau no gráfico aparece mais largo do que foi, e demora alguns minutos para voltar a 1. O gráfico conta a história certa; o cronômetro exato é a saída do Passo 21, no seu terminal.
+> Espere **cerca de um minuto** depois do comando terminar antes de recarregar; se o widget ainda estiver reto em 1, recarregue de novo depois de outro minuto. E não espere precisão de cronômetro: a janela real com duas instâncias dura pouco de propósito (numa execução medimos cerca de 45 segundos), mas a métrica tem granularidade de 60 segundos e a instância que sai continua reportando por alguns minutos — então o degrau no gráfico aparece mais largo do que foi, e demora alguns minutos para voltar a 1. O gráfico conta a história certa; o cronômetro exato é a saída do Passo 21, no seu terminal.
 
 O widget "As instâncias estão de pé? (CPU %)", na linha 4, é o complemento: é lá que você confirma que o assíncrono realmente desligou quando a capacidade voltou a zero — a série simplesmente deixa de ter dado.
 
@@ -1250,6 +1255,7 @@ Se `make plan` fosse rodado agora, ele diria `No changes` para o scalable target
 
 - [x] `load.json`: `success_rate >= 0.99` nos três níveis.
 - [x] `scale.json`: `before=1`, `scaled=2`, `restored=1`.
+- [x] No painel, a linha 3 mostra a contagem de instâncias subindo para 2 e voltando para 1.
 - [x] `make status` confirma `min=1, max=2` de volta.
 
 ---
@@ -1438,7 +1444,7 @@ make verify-clean
 ### Checkpoint
 
 - [x] `Destroy complete!`
-- [x] `make verify-clean` responde `[PASS] verificação de limpeza` com os oito itens.
+- [x] `make verify-clean` responde `[PASS] verificação de limpeza` com os nove itens.
 
 **Zero recursos cobrando.**
 
