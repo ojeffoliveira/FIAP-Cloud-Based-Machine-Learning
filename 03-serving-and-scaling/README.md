@@ -874,6 +874,8 @@ Se as duas linhas de overhead estiverem quase coladas, seu serverless provavelme
 
 **Você vai ver um pico isolado, não uma linha contínua.** O `make compare` dispara 21 chamadas em poucos segundos e para; só um intervalo de 60 segundos tem dado. Um gráfico com um ponto só não é defeito do painel, é o formato do tráfego que você acabou de gerar.
 
+Se os dois gráficos estiverem completamente vazios, recarregue depois de um ou dois minutos antes de suspeitar de erro: a métrica do `compare` pode ainda não ter sido publicada.
+
 > 📸 **Nota do autor (não é tarefa sua)** — capturar os dois widgets da linha 1 logo depois do `make compare`, com o pico visível nos dois. É a evidência visual de que o custo do serverless está no overhead, não no modelo.
 <!-- ![](img/painel-latencia.png) -->
 
@@ -1039,7 +1041,7 @@ O Batch Transform provisiona a própria instância antes de processar, então os
 
 **17.1. Confirme no painel que a máquina do batch existiu e desapareceu**
 
-Ainda na **linha 2**, o widget mais à direita é "A máquina do batch existiu e desapareceu?".
+Recarregue o painel e, ainda na **linha 2**, olhe o widget mais à direita, "A máquina do batch existiu e desapareceu?".
 
 O que procurar é a **forma da curva**, não o valor: uma série que começa, dura alguns minutos e termina. Os três endpoints continuam de pé no painel; esta máquina não. É a diferença entre pagar por capacidade disponível e pagar por trabalho feito.
 
@@ -1255,7 +1257,7 @@ Se `make plan` fosse rodado agora, ele diria `No changes` para o scalable target
 
 - [x] `load.json`: `success_rate >= 0.99` nos três níveis.
 - [x] `scale.json`: `before=1`, `scaled=2`, `restored=1`.
-- [x] No painel, a linha 3 mostra a contagem de instâncias subindo para 2 e voltando para 1.
+- [x] No painel, a linha 3 mostra a carga ultrapassando o alvo sem a política reagir, e a contagem de instâncias subindo para 2 e voltando para 1.
 - [x] `make status` confirma `min=1, max=2` de volta.
 
 ---
