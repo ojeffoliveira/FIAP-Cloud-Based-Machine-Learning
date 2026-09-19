@@ -339,3 +339,115 @@ resource "aws_cloudwatch_dashboard" "serving" {
     ]
   })
 }
+
+# ---------------------------------------------------------------------------- #
+# Painel de observação ao vivo — só a comparação da Parte 4, para assistir
+# enquanto `make compare DURACAO=180` mantém tráfego.
+#
+# Por que um painel separado em vez de reaproveitar o de cima: a janela de tempo é
+# propriedade do painel inteiro (`start`), não de cada widget. Este quer os últimos
+# 5 minutos; o painel principal precisa de janela larga, porque o job de batch leva
+# minutos e a curva da elasticidade só faz sentido com histórico. Um `start` serve
+# bem a um dos dois usos, nunca aos dois.
+#
+# `liveData = true` mostra o dado publicado no último minuto mesmo sem a agregação
+# fechada. É o que faz a linha andar durante a observação, em vez de só aparecer
+# quando o intervalo fecha.
+#
+# Três widgets, não dez: o uso aqui é um teste simples de comparação, e gráfico com
+# anotação e linha de alvo atrapalha quem só quer ver quem responde mais rápido.
+#
+# O intervalo de atualização de 10 s NÃO entra aqui: o corpo do painel não tem
+# propriedade de refresh (conferido na referência de DashboardBody). É ajuste do
+# console, e o cabeçalho do painel instrui quem abrir.
+resource "aws_cloudwatch_dashboard" "live" {
+  count = var.deploy_serving ? 1 : 0
+
+  dashboard_name = local.dashboard_live_name
+
+  dashboard_body = jsonencode({
+    start          = "-PT5M"
+    periodOverride = "inherit"
+
+    widgets = [
+      {
+        type   = "text"
+        x      = 0
+        y      = 0
+        width  = 24
+        height = 3
+        properties = {
+          markdown = join("\n", [
+            "## Observação ao vivo · atendimento (real-time) vs app (serverless)",
+            "**Ajuste o intervalo de atualização para 10 segundos** no seletor ao lado do intervalo de tempo, no canto superior direito. O painel já abre mostrando os últimos 5 minutos.",
+            "Rode `make compare DURACAO=180` e acompanhe. Cada minuto de tráfego vira um ponto: três minutos desenham uma linha curta, e aumentar `DURACAO` alonga a linha.",
+          ])
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 3
+        width  = 8
+        height = 7
+        properties = {
+          title    = "Está chegando chamada?"
+          view     = "timeSeries"
+          region   = var.region
+          stat     = "Sum"
+          period   = 60
+          liveData = true
+          yAxis    = { left = { label = "chamadas/min", showUnits = false, min = 0 } }
+          metrics = [
+            ["AWS/SageMaker", "Invocations", "EndpointName", local.realtime_endpoint_name, "VariantName", "AllTraffic", { label = "Atendimento", color = "#1f77b4" }],
+            ["AWS/SageMaker", "Invocations", "EndpointName", local.serverless_endpoint_name, "VariantName", "AllTraffic", { label = "App", color = "#ff7f0e" }],
+          ]
+        }
+      },
+      {
+        type   = "metric"
+        x      = 8
+        y      = 3
+        width  = 8
+        height = 7
+        properties = {
+          title    = "Quem responde mais rápido? (latência do modelo, ms)"
+          view     = "timeSeries"
+          region   = var.region
+          stat     = "Average"
+          period   = 60
+          liveData = true
+          yAxis    = { left = { label = "ms", showUnits = false, min = 0 } }
+          metrics = [
+            [{ expression = "m1/1000", label = "Atendimento", id = "e1", color = "#1f77b4" }],
+            [{ expression = "m2/1000", label = "App", id = "e2", color = "#ff7f0e" }],
+            ["AWS/SageMaker", "ModelLatency", "EndpointName", local.realtime_endpoint_name, "VariantName", "AllTraffic", { id = "m1", visible = false }],
+            ["AWS/SageMaker", "ModelLatency", "EndpointName", local.serverless_endpoint_name, "VariantName", "AllTraffic", { id = "m2", visible = false }],
+          ]
+        }
+      },
+      {
+        type   = "metric"
+        x      = 16
+        y      = 3
+        width  = 8
+        height = 7
+        properties = {
+          title    = "Quanto custa não ter instância de pé? (overhead, ms)"
+          view     = "timeSeries"
+          region   = var.region
+          stat     = "Average"
+          period   = 60
+          liveData = true
+          yAxis    = { left = { label = "ms", showUnits = false, min = 0 } }
+          metrics = [
+            [{ expression = "m1/1000", label = "Atendimento", id = "e1", color = "#1f77b4" }],
+            [{ expression = "m2/1000", label = "App", id = "e2", color = "#ff7f0e" }],
+            ["AWS/SageMaker", "OverheadLatency", "EndpointName", local.realtime_endpoint_name, "VariantName", "AllTraffic", { id = "m1", visible = false }],
+            ["AWS/SageMaker", "OverheadLatency", "EndpointName", local.serverless_endpoint_name, "VariantName", "AllTraffic", { id = "m2", visible = false }],
+          ]
+        }
+      },
+    ]
+  })
+}

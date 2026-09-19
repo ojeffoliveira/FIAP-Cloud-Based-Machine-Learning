@@ -263,14 +263,28 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     corpo = json.loads(aws.get_dashboard(session, nome)["DashboardBody"])
     widgets = len(corpo.get("widgets", []))
 
+    nome_live = outputs.get("dashboard_live_name") or ""
+    url_live = outputs.get("dashboard_live_url") or ""
+    widgets_live = 0
+    if nome_live:
+        corpo_live = json.loads(aws.get_dashboard(session, nome_live)["DashboardBody"])
+        widgets_live = len(corpo_live.get("widgets", []))
+
     log("")
-    log(f"  Painel  : {nome}")
-    log(f"  Widgets : {widgets}")
+    log(f"  Painel do lab       : {nome} ({widgets} widgets, janela de 1 hora)")
+    if nome_live:
+        log(f"  Painel ao vivo      : {nome_live} ({widgets_live} widgets, janela de 5 minutos)")
     log("")
-    log("  Abra o link abaixo e DEIXE ABERTO durante o lab inteiro. Ele atualiza")
-    log("  sozinho conforme novas métricas chegam (granularidade de 60 s).")
+    log("  Deixe o painel do lab aberto do começo ao fim. Ele atualiza sozinho")
+    log("  conforme novas métricas chegam (granularidade de 60 s).")
+    log("")
+    log("  O painel ao vivo é para assistir `make compare DURACAO=180`: já abre nos")
+    log("  últimos 5 minutos, e você ajusta o intervalo de atualização para 10 s no")
+    log("  seletor do canto superior direito do console.")
     log("")
     print(url)
+    if url_live:
+        print(url_live)
     return 0
 
 
@@ -287,25 +301,85 @@ def cmd_compare(args: argparse.Namespace) -> int:
     rows = read_csv_rows(DATA_DIR / TEST_FEATURES_FILE)[:5]
     body = rows_to_body(rows)
 
+    # `--duracao` existe para o painel ter o que desenhar. A métrica de endpoint do
+    # SageMaker tem granularidade mínima de 60 s, então a rajada curta do modo
+    # padrão (21 chamadas em segundos) cai toda dentro de UM intervalo e o gráfico
+    # mostra um ponto isolado — tecnicamente correto e visualmente inútil para
+    # comparar dois padrões de serving. Mantendo tráfego por alguns minutos, cada
+    # minuto vira um ponto e a comparação passa a ser uma linha.
+    duracao = max(0, int(getattr(args, "duracao", 0) or 0))
+    modos = (("realtime", "realtime_endpoint_name"), ("serverless", "serverless_endpoint_name"))
+
     result: dict = {}
-    for mode, name_key in (("realtime", "realtime_endpoint_name"), ("serverless", "serverless_endpoint_name")):
-        endpoint_name = aws.require_output(outputs, name_key)
-        first_probs, first_elapsed = aws.invoke_endpoint_csv(session, endpoint_name, body)
-        warm_latencies = []
-        warm_probs = first_probs
-        for _ in range(20):
-            probs, elapsed = aws.invoke_endpoint_csv(session, endpoint_name, body)
-            warm_latencies.append(elapsed * 1000.0)
-            warm_probs = probs
-        stats = metrics.latency_stats(warm_latencies)
-        result[mode] = {
-            "first_ms": round(first_elapsed * 1000.0, 3),
-            "warm_p50_ms": stats["p50_ms"],
-            "warm_p95_ms": stats["p95_ms"],
-            "success_rate": 1.0,
-            "sample_predictions": warm_probs,
-        }
-        log(f"[compare] {mode:<10} first={result[mode]['first_ms']}ms warm_p50={stats['p50_ms']}ms warm_p95={stats['p95_ms']}ms")
+
+    if duracao == 0:
+        for mode, name_key in modos:
+            endpoint_name = aws.require_output(outputs, name_key)
+            first_probs, first_elapsed = aws.invoke_endpoint_csv(session, endpoint_name, body)
+            warm_latencies = []
+            warm_probs = first_probs
+            for _ in range(20):
+                probs, elapsed = aws.invoke_endpoint_csv(session, endpoint_name, body)
+                warm_latencies.append(elapsed * 1000.0)
+                warm_probs = probs
+            stats = metrics.latency_stats(warm_latencies)
+            result[mode] = {
+                "first_ms": round(first_elapsed * 1000.0, 3),
+                "warm_p50_ms": stats["p50_ms"],
+                "warm_p95_ms": stats["p95_ms"],
+                "success_rate": 1.0,
+                "sample_predictions": warm_probs,
+            }
+            log(f"[compare] {mode:<10} first={result[mode]['first_ms']}ms warm_p50={stats['p50_ms']}ms warm_p95={stats['p95_ms']}ms")
+    else:
+        # Os dois endpoints são chamados ALTERNADAMENTE, não um depois do outro: se
+        # o real-time recebesse os três minutos inteiros e só depois o serverless,
+        # as duas séries ficariam em janelas de tempo diferentes e o painel não
+        # compararia nada — mostraria dois picos lado a lado.
+        endpoints = {mode: aws.require_output(outputs, key) for mode, key in modos}
+        primeiro: dict[str, float] = {}
+        latencias: dict[str, list[float]] = {mode: [] for mode in endpoints}
+        ultimas_probs: dict[str, list[float]] = {}
+        falhas = {mode: 0 for mode in endpoints}
+        chamadas = {mode: 0 for mode in endpoints}
+
+        log(f"[compare] mantendo tráfego nos dois endpoints por {duracao}s (cada minuto vira um ponto no painel)")
+        fim = time.monotonic() + duracao
+        proximo_aviso = time.monotonic() + 15
+        while time.monotonic() < fim:
+            for mode, endpoint_name in endpoints.items():
+                try:
+                    probs, elapsed = aws.invoke_endpoint_csv(session, endpoint_name, body)
+                except Exception:  # noqa: BLE001 - uma falha isolada não encerra a janela
+                    falhas[mode] += 1
+                    chamadas[mode] += 1
+                    continue
+                chamadas[mode] += 1
+                primeiro.setdefault(mode, elapsed * 1000.0)
+                latencias[mode].append(elapsed * 1000.0)
+                ultimas_probs[mode] = probs
+            if time.monotonic() >= proximo_aviso:
+                restante = int(fim - time.monotonic())
+                log(f"[compare] faltam ~{max(0, restante)}s | chamadas: " + " ".join(f"{m}={chamadas[m]}" for m in endpoints))
+                proximo_aviso += 15
+
+        for mode in endpoints:
+            if not latencias[mode]:
+                raise aws.AwsError(f"nenhuma chamada ao {mode} teve sucesso na janela de {duracao}s")
+            stats = metrics.latency_stats(latencias[mode])
+            result[mode] = {
+                "first_ms": round(primeiro[mode], 3),
+                "warm_p50_ms": stats["p50_ms"],
+                "warm_p95_ms": stats["p95_ms"],
+                "success_rate": round((chamadas[mode] - falhas[mode]) / chamadas[mode], 4),
+                "sample_predictions": ultimas_probs[mode],
+                "requests": chamadas[mode],
+            }
+            log(
+                f"[compare] {mode:<10} chamadas={chamadas[mode]} first={result[mode]['first_ms']}ms "
+                f"warm_p50={stats['p50_ms']}ms warm_p95={stats['p95_ms']}ms"
+            )
+        result["duration_s"] = duracao
 
     tolerance = cfg.predictions_tolerance
     predictions_match = all(
@@ -645,6 +719,13 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         p = sub.add_parser(name)
         p.set_defaults(func=func)
+        if name == "compare":
+            p.add_argument(
+                "--duracao",
+                type=int,
+                default=0,
+                help="segundos de tráfego contínuo nos dois endpoints; 0 usa a rajada curta",
+            )
 
     return parser
 

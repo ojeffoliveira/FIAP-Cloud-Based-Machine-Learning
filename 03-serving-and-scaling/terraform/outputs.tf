@@ -101,3 +101,13 @@ output "dashboard_name" {
 output "dashboard_url" {
   value = var.deploy_serving ? "https://${var.region}.console.aws.amazon.com/cloudwatch/home?region=${var.region}#dashboards/dashboard/${local.dashboard_name}" : ""
 }
+
+output "dashboard_live_name" {
+  value = var.deploy_serving ? aws_cloudwatch_dashboard.live[0].dashboard_name : ""
+}
+
+# Painel de observação ao vivo: janela de 5 minutos, para assistir o
+# `make compare DURACAO=...` desenhando as duas séries.
+output "dashboard_live_url" {
+  value = var.deploy_serving ? "https://${var.region}.console.aws.amazon.com/cloudwatch/home?region=${var.region}#dashboards/dashboard/${local.dashboard_live_name}" : ""
+}

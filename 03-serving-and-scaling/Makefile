@@ -71,8 +71,8 @@ status: ## Descreve endpoints, configs e scalable targets em JSON
 dashboard: ## Imprime o link direto do painel do CloudWatch deste laboratório
 	@$(PYTHON) $(SCRIPTS)/lab.py dashboard
 
-compare: ## Smoke + latência da primeira chamada e das quentes, real-time vs serverless
-	@$(PYTHON) $(SCRIPTS)/lab.py compare
+compare: ## Smoke + latência, real-time vs serverless (DURACAO=180 mantém tráfego por 3 min)
+	@$(PYTHON) $(SCRIPTS)/lab.py compare $(if $(DURACAO),--duracao $(DURACAO),)
 
 async: ## Sobe o payload para o S3, InvokeEndpointAsync, espera e valida a saída
 	@$(PYTHON) $(SCRIPTS)/lab.py async

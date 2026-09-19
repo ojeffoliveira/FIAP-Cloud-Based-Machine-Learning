@@ -212,7 +212,7 @@ make help
 >   apply          Provisiona storage + bootstrap de treino, portão, e então 3 endpoints + autoscaling
 >   status         Descreve endpoints, configs e scalable targets em JSON
 >   dashboard      Imprime o link direto do painel do CloudWatch deste laboratório
->   compare        Smoke + latência da primeira chamada e das quentes, real-time vs serverless
+>   compare        Smoke + latência, real-time vs serverless (DURACAO=180 mantém tráfego por 3 min)
 >   async          Sobe o payload para o S3, InvokeEndpointAsync, espera e valida a saída
 >   batch          CreateTransformJob para as 600 linhas de teste, espera e valida as 600 saídas
 >   load           Teste de carga no endpoint real-time com concorrência 1/4/8
@@ -245,8 +245,8 @@ São 21 comandos, e é a lista inteira do laboratório.
 | `make plan` | `validate-data` + `validate`, depois `terraform plan` | não cria recurso | mostra o que vai mudar |
 | `make apply` | stage 1 (S3 + training bootstrap) → portão (`DescribeTrainingJob` + `HeadObject`) → stage 2 (model + 3 endpoint configs/endpoints + autoscaling) | **sim** | o comando que sobe tudo, em um passo só |
 | `make status` | `DescribeEndpoint`/`DescribeEndpointConfig`/`DescribeScalableTargets` dos três modos | não, só leitura | inventário rápido do que está no ar |
-| `make dashboard` | `GetDashboard` no painel criado pelo estágio 2 e imprime o link direto | não, só leitura | o painel é a superfície visual do lab; você não precisa achar o nome dele no console |
-| `make compare` | 1 chamada + 20 chamadas warm, real-time e serverless, com o mesmo payload fixo | invocações pequenas | mede latência e prova que as predictions batem |
+| `make dashboard` | `GetDashboard` nos dois painéis criados pelo estágio 2 e imprime os dois links | não, só leitura | os painéis são a superfície visual do lab; você não precisa achar o nome deles no console |
+| `make compare` | 1 chamada + 20 chamadas warm, real-time e serverless, com o mesmo payload fixo. Com `DURACAO=180`, alterna chamadas nos dois endpoints por 3 minutos em vez da rajada curta | invocações pequenas | mede latência e prova que as predictions batem; a duração existe para o painel ter linha em vez de ponto |
 | `make async` | sobe payload no S3, `InvokeEndpointAsync`, espera o output aparecer no S3 | sim, pequeno | prova o desacoplamento request/resposta |
 | `make batch` | `CreateTransformJob` via Boto3 nos 600 registros de teste | sim, efêmero | prova computação sem endpoint persistente |
 | `make load` | matriz de concorrência 1/4/8 no real-time, calcula p50/p95/p99/RPS | invocações | mede throughput sob pressão |
@@ -743,18 +743,25 @@ cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling
 make dashboard
 ```
 
-> Saída esperada (o link é o seu; o nome do painel é igual para todo mundo):
+> Saída esperada (os links são os seus; os nomes dos painéis são iguais para todo mundo):
 > ```text
->   Painel  : prb-cloud-ml-lab2-serving
->   Widgets : 11
+>   Painel do lab       : prb-cloud-ml-lab2-serving (11 widgets, janela de 1 hora)
+>   Painel ao vivo      : prb-cloud-ml-lab2-serving-ao-vivo (4 widgets, janela de 5 minutos)
 >
->   Abra o link abaixo e DEIXE ABERTO durante o lab inteiro. Ele atualiza
->   sozinho conforme novas métricas chegam (granularidade de 60 s).
+>   Deixe o painel do lab aberto do começo ao fim. Ele atualiza sozinho
+>   conforme novas métricas chegam (granularidade de 60 s).
+>
+>   O painel ao vivo é para assistir `make compare DURACAO=180`: já abre nos
+>   últimos 5 minutos, e você ajusta o intervalo de atualização para 10 s no
+>   seletor do canto superior direito do console.
 >
 > https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/prb-cloud-ml-lab2-serving
+> https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/prb-cloud-ml-lab2-serving-ao-vivo
 > ```
 
-A última linha é o link: clique nela (ou copie e cole no navegador). O `make apply` criou o painel junto com os endpoints, e são onze widgets — dez gráficos e um cabeçalho com a ordem de leitura. **Deixe essa aba aberta até o fim do laboratório**: as linhas do painel acompanham as Partes 4, 5 e 6, e é nele que você vai comparar os padrões de serving em vez de somar números de cabeça.
+São **dois painéis**, e eles têm usos diferentes. O primeiro link é o painel do laboratório: onze widgets, janela de uma hora, e é o que você deixa aberto do começo ao fim. O segundo é o painel de observação ao vivo, com três gráficos e janela de cinco minutos, usado só na Parte 4, para assistir a comparação acontecendo. Abra o primeiro agora.
+
+O `make apply` criou os dois junto com os endpoints. **Deixe a aba do painel do laboratório aberta**: as linhas dele acompanham as Partes 4, 5 e 6, e é nele que você vai comparar os padrões de serving em vez de somar números de cabeça.
 
 Agora ele está praticamente vazio, e isso é o comportamento correto: nenhuma chamada foi feita ainda, e métrica de endpoint só passa a existir depois que alguém invoca.
 
@@ -769,8 +776,7 @@ O painel tem quatro linhas, e você vai ler uma por Parte:
 
 A linha 4 é a de saúde e não tem passo próprio: ela existe para você conferir, em qualquer momento, que nada está falhando por trás dos números que está lendo. Se o widget "Alguma chamada falhou?" sair de zero em qualquer ponto do laboratório, pare e investigue antes de seguir — os números das outras linhas passam a não significar o que você acha.
 
-> 📸 **Nota do autor (não é tarefa sua)** — capturar o painel recém-aberto, com os widgets ainda sem série. Mostra que o painel nasce junto da infraestrutura e que o vazio inicial é esperado.
-<!-- ![](img/painel-vazio.png) -->
+![](img/painel-vazio.png)
 
 <details>
 <summary><b>💡 Clique para entender: o que <code>make dashboard</code> faz por baixo dos panos</b></summary>
@@ -808,26 +814,57 @@ Predictions equivalentes entre real-time e serverless, com o perfil de latência
 
 **13. Compare real-time e serverless com a mesma lista de registros**
 
-```bash
-make compare
+Antes de rodar, abra o **painel de observação ao vivo** numa aba nova. Ele é o segundo link que o Passo 12.1 imprimiu:
+
+```text
+https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/prb-cloud-ml-lab2-serving-ao-vivo
 ```
 
-> Saída esperada (os valores de latência são medidos na sua execução, não fixos; estes são de uma execução real):
+Se não tiver o link à mão, `make dashboard` imprime os dois de novo. Esse painel já abre mostrando os **últimos 5 minutos**. Falta um ajuste que só existe no console: no canto superior direito, **mude o intervalo de atualização para 10 segundos**. Feito isso, deixe a aba visível e rode:
+
+```bash
+make compare DURACAO=180
+```
+
+O comando mantém chamadas nos dois endpoints por três minutos, alternando entre eles, e você vê as duas séries se desenhando ao vivo.
+
+> Saída esperada (o texto das linhas é fixo; as contagens e os tempos são da sua execução):
 > ```text
-> [compare] realtime    first=452.848ms warm_p50=441.605ms warm_p95=470.669ms
-> [compare] serverless  first=6395.562ms warm_p50=471.810ms warm_p95=512.949ms
+> [compare] mantendo tráfego nos dois endpoints por 180s (cada minuto vira um ponto no painel)
+> [compare] faltam ~165s | chamadas: realtime=… serverless=…
+> [compare] faltam ~150s | chamadas: realtime=… serverless=…
+> [compare] realtime   chamadas=… first=…ms warm_p50=…ms warm_p95=…ms
+> [compare] serverless chamadas=… first=…ms warm_p50=…ms warm_p95=…ms
 > [compare] predictions_match=True (tolerância 1e-06)
 > ```
 
+`predictions_match=True` é o que importa mais do que os milissegundos: prova que o mesmo artefato responde igual nos dois modos.
+
 ![](img/06-make-compare.png)
 
-`predictions_match=True` é o que importa mais do que os milissegundos: prova que o mesmo artefato responde igual nos dois modos. A diferença de latência entre `first` (6,4s) e `warm_p50` (472ms) no serverless é o comportamento de "primeira chamada" que a Helena precisa entender antes de escolher esse modo para o app: depois de aquecido, o serverless anda junto com o real-time; a conta chega inteira só na primeira invocação depois de um período ocioso.
+A imagem acima é de uma execução no **modo padrão**, sem `DURACAO`: serve para você reconhecer o formato das linhas de latência. No modo de três minutos as mesmas linhas aparecem no fim, precedidas pelos avisos de tempo restante.
+
+> [!IMPORTANT]
+> A métrica de endpoint do SageMaker tem granularidade mínima de **60 segundos**, e não existe resolução mais fina para métrica de serviço. Então três minutos de tráfego desenham cerca de **três pontos por série** — uma linha curta, não uma curva suave. Se quiser uma linha mais longa para projetar em aula, aumente a duração (`make compare DURACAO=300`).
+
+<details>
+<summary><b>💡 Clique para entender: por que existe o parâmetro <code>DURACAO</code></b></summary>
+<blockquote>
+
+Sem o parâmetro, o comando faz 1 chamada isolada e 20 chamadas seguidas, tudo em poucos segundos. Para medir latência isso é suficiente e é o modo padrão. Para **ver** a comparação, não é: as 21 chamadas caem todas dentro do mesmo intervalo de 60 segundos, então o gráfico mostra um ponto isolado por série. Tecnicamente correto, visualmente inútil.
+
+Com `DURACAO`, o comando alterna chamadas entre os dois endpoints até o tempo acabar. A alternância não é detalhe: se o real-time recebesse os três minutos inteiros e só depois o serverless, as duas séries ficariam em janelas de tempo diferentes e o painel mostraria dois picos separados, não uma comparação.
+
+O resultado gravado em `compare.json` ganha dois campos a mais nesse modo (`requests` por endpoint e `duration_s`), e o `success_rate` passa a ser medido de verdade em vez de fixo em 1.0 — numa janela de três minutos uma chamada pode falhar sem que isso invalide a medição.
+
+</blockquote>
+</details>
 
 <details>
 <summary><b>💡 Clique para entender: como <code>make compare</code> mede e compara</b></summary>
 <blockquote>
 
-O comando pega uma lista fixa de 5 linhas de `test_features.csv` (as mesmas para os dois modos) e monta um único payload CSV com as 5. Para cada endpoint: faz **1 chamada isolada** e cronometra só ela (`first_ms`); depois faz **20 chamadas sequenciais** com o mesmo payload e guarda cada tempo de resposta, do qual calcula p50 e p95 por interpolação linear entre as amostras ordenadas. Ao final, compara as predictions da última chamada de cada modo, posição a posição, com tolerância `1e-6` — se qualquer par diferir mais que isso, `predictions_match` vira `False` e o comando termina com erro.
+O comando pega uma lista fixa de 5 linhas de `test_features.csv` (as mesmas para os dois modos) e monta um único payload CSV com as 5. No modo padrão, para cada endpoint: faz **1 chamada isolada** e cronometra só ela (`first_ms`); depois faz **20 chamadas sequenciais** com o mesmo payload e guarda cada tempo de resposta, do qual calcula p50 e p95 por interpolação linear entre as amostras ordenadas. Ao final, compara as predictions da última chamada de cada modo, posição a posição, com tolerância `1e-6` — se qualquer par diferir mais que isso, `predictions_match` vira `False` e o comando termina com erro.
 
 📚 Documentação oficial: [Serverless Inference](https://docs.aws.amazon.com/sagemaker/latest/dg/serverless-endpoints.html) e [Create a serverless inference endpoint configuration](https://docs.aws.amazon.com/sagemaker/latest/dg/serverless-endpoints-create-config.html) — a seção "Considerations" ali explica o comportamento de first-request que você acabou de medir.
 
@@ -876,8 +913,8 @@ Se as duas linhas de overhead estiverem quase coladas, seu serverless provavelme
 
 Se os dois gráficos estiverem completamente vazios, recarregue depois de um ou dois minutos antes de suspeitar de erro: a métrica do `compare` pode ainda não ter sido publicada.
 
-> 📸 **Nota do autor (não é tarefa sua)** — capturar os dois widgets da linha 1 logo depois do `make compare`, com o pico visível nos dois. É a evidência visual de que o custo do serverless está no overhead, não no modelo.
-<!-- ![](img/painel-latencia.png) -->
+
+![](img/painel-latencia.png)
 
 ---
 

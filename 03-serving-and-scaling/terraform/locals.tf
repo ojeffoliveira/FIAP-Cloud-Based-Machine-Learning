@@ -32,6 +32,8 @@ locals {
   # é o que permite o `verify-clean` achá-lo só pelo prefixo, do mesmo jeito que
   # ele acha o bucket.
   dashboard_name = "${var.project_prefix}-serving"
+  # Mesmo prefixo, para o verify-clean achar os dois de uma vez.
+  dashboard_live_name = "${var.project_prefix}-serving-ao-vivo"
 
   data_dir = "${path.module}/${var.data_dir}"
 
