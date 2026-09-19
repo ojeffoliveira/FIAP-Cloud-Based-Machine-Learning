@@ -211,12 +211,12 @@ make help
 >   plan           Planeja o estágio atual
 >   apply          Provisiona storage + bootstrap de treino, portão, e então 3 endpoints + autoscaling
 >   status         Descreve endpoints, configs e scalable targets em JSON
->   dashboard      Imprime o link direto do painel do CloudWatch deste laboratório
+>   dashboard      Imprime os links dos dois painéis do CloudWatch (o do lab e o de observação ao vivo)
 >   compare        Smoke + latência, real-time vs serverless (DURACAO=180 mantém tráfego por 3 min)
 >   async          Sobe o payload para o S3, InvokeEndpointAsync, espera e valida a saída
 >   batch          CreateTransformJob para as 600 linhas de teste, espera e valida as 600 saídas
->   load           Teste de carga no endpoint real-time com concorrência 1/4/8
->   scale-demo     Prova 1->2->1 instâncias via Application Auto Scaling e restaura a config
+>   load           Carga no real-time com concorrência 1/4/8 (DURACAO=180 dá um minuto a cada nível)
+>   scale-demo     Prova 1->2->1 instâncias e restaura (DURACAO=120 segura o degrau e gera tráfego de fundo)
 >   evidence       Consolida os resultados conferíveis em artifacts/evidence/
 >   destroy        Destrói todos os recursos gerenciados
 >   verify-clean   Prova por consulta direta à API que não sobrou nada cobrando com o prefixo deste lab
@@ -249,8 +249,8 @@ São 21 comandos, e é a lista inteira do laboratório.
 | `make compare` | 1 chamada + 20 chamadas warm, real-time e serverless, com o mesmo payload fixo. Com `DURACAO=180`, alterna chamadas nos dois endpoints por 3 minutos em vez da rajada curta | invocações pequenas | mede latência e prova que as predictions batem; a duração existe para o painel ter linha em vez de ponto |
 | `make async` | sobe payload no S3, `InvokeEndpointAsync`, espera o output aparecer no S3 | sim, pequeno | prova o desacoplamento request/resposta |
 | `make batch` | `CreateTransformJob` via Boto3 nos 600 registros de teste | sim, efêmero | prova computação sem endpoint persistente |
-| `make load` | matriz de concorrência 1/4/8 no real-time, calcula p50/p95/p99/RPS | invocações | mede throughput sob pressão |
-| `make scale-demo` | eleva o `MinCapacity` do scalable target, prova 1→2 por `DescribeEndpoint`, restaura | sim, enquanto houver 2 instâncias | demonstração controlada de elasticidade |
+| `make load` | matriz de concorrência 1/4/8 no real-time, calcula p50/p95/p99/RPS. Com `DURACAO=180`, cada nível ocupa um minuto em vez de um número fixo de requisições | invocações | mede throughput sob pressão; a duração desenha três degraus no painel e provoca o scale-out de verdade |
+| `make scale-demo` | normaliza para 1 instância se preciso, eleva o `MinCapacity`, prova 1→2 por `DescribeEndpoint`, restaura. Com `DURACAO=120`, segura o degrau por dois minutos e mantém tráfego de fundo | sim, enquanto houver 2 instâncias | demonstração controlada de elasticidade; a duração é o que torna o degrau e a distribuição visíveis |
 | `make evidence` | consulta as APIs de novo e consolida tudo em `artifacts/evidence/` | não, só leitura | dossiê rastreável |
 | `make destroy` | `terraform destroy` | encerra o custo | desliga tudo que foi criado |
 | `make verify-clean` | pergunta direto às APIs (sem olhar o state) se sobrou algo com o prefixo do lab | não | não confia no que o Terraform *acha* que destruiu |
@@ -1020,10 +1020,15 @@ Recarregue o painel e olhe a **linha 2**, que é desta parte:
 
 | Widget | O que procurar |
 |---|---|
-| "A fila do assíncrono está sendo drenada?" | o ciclo completo já registrado: os itens subindo quando o request entrou e voltando a zero quando terminou; a linha vermelha é a espera do item mais antigo, em segundos |
-| "Chegou trabalho sem instância para atender?" | um degrau em 1 se a sua chamada pegou o endpoint com capacidade zero |
+| "A fila do assíncrono está sendo drenada?" | uma linha **reta em zero** |
+| "Chegou trabalho sem instância para atender?" | zero, ou um degrau em 1 se a sua chamada pegou o endpoint com capacidade zero |
 
-O `make async` do Passo 15 já terminou, então você não vê isso em movimento: vê o histórico dos últimos minutos, com a subida e a queda já desenhadas. Se o gráfico estiver completamente vazio, recarregue depois de um ou dois minutos antes de suspeitar de erro — a publicação da métrica tem atraso próprio.
+> [!IMPORTANT]
+> **Reta em zero é o resultado correto, não falha.** Fila só existe quando a chegada supera a drenagem, e aqui ela não supera: uma requisição de 50 linhas é processada em bem menos de um segundo, então o item entra e sai entre duas amostragens da métrica. Medimos isso de propósito — submetendo dez requisições seguidas, várias vezes, a fila continuou cravada em zero.
+
+O que esse par de widgets responde, então, é: **a capacidade está dando conta?** Aqui está. Num volume de produção, com arquivos grandes chegando em rajada, é nesse gráfico que a fila apareceria — e é por isso que ele existe no painel.
+
+A evidência de que o assíncrono funcionou não é o painel: é a saída do Passo 15 e o objeto no S3, que você já conferiu. Para ver algo se mover por causa do assíncrono, olhe a CPU do endpoint dele no widget "As instâncias estão de pé?", na linha 4: é ali que a máquina aparece enquanto processa e desaparece quando a capacidade volta a zero.
 
 Este par de widgets é a razão de o assíncrono existir. No real-time a espera do cliente é a latência; aqui a espera é **fila**, e fila é uma coisa que se olha, não que se estima. Se o segundo widget marcou 1, você viu ao vivo a política `async-target-from-zero` fazendo o trabalho dela: chegou pedido, não havia máquina, e o endpoint subiu uma por causa desse sinal.
 
@@ -1141,7 +1146,7 @@ Uma matriz de carga com sucesso acima de 99%, e uma demonstração provada de el
 **19. Rode o teste de carga no real-time**
 
 ```bash
-make load
+make load DURACAO=180
 ```
 
 > Saída esperada (três níveis, valores medidos numa execução real; os seus vão variar):
@@ -1174,11 +1179,17 @@ Para cada nível da matriz (concorrência 1/40 requests, 4/80, 8/120), o comando
 
 Recarregue o painel e olhe o widget "A carga se distribuiu?", na **linha 3**.
 
-São duas séries: chamadas no total e chamadas por instância. Enquanto houver **uma** instância, as duas ficam exatamente em cima uma da outra — a instância recebe tudo. É isso que você deve ver.
+São duas séries: chamadas no total e chamadas por instância. Com **uma** instância as duas ficam exatamente em cima uma da outra — a instância recebe tudo.
 
-A linha laranja é o alvo da política de scaling. O que procurar aqui é contraintuitivo: **a série vai ultrapassar o alvo, e a política não vai reagir.** Numa execução real a série chegou a 226 chamadas em um minuto, contra um alvo de 60 por instância, e o endpoint continuou com uma máquina.
+Com `DURACAO=180` cada nível de concorrência ocupa cerca de um minuto, então o gráfico desenha **três degraus**, um por nível. Numa execução real foram 73, 247 e 659 chamadas por minuto, e a linha laranja do alvo (60 por instância) é cruzada nos três.
 
-Não é defeito. Uma política de target tracking reage a violação **sustentada**, não a um pico: o alarme por trás dela precisa de vários minutos acima do alvo antes de disparar, e o `make load` inteiro dura cerca de um minuto. Guarde essa observação, porque ela é exatamente o motivo de o Passo 21 forçar o scale-out em vez de esperar o tráfego provocá-lo.
+> [!IMPORTANT]
+> Três minutos acima do alvo é violação **sustentada**, e é isso que a política de target tracking espera para agir. Numa execução real o alarme foi para `ALARM` cerca de dois minutos depois do comando terminar, e o endpoint subiu para **duas instâncias** por conta própria. Isso não é defeito: é a política funcionando, e é a melhor coisa que você vai ver nesta parte. Guarde a observação — o Passo 21 força o mesmo movimento de forma controlada, para você não depender do tempo do alarme.
+
+Duas consequências práticas dessa reação:
+
+- **custo**: a segunda instância cobra enquanto existir, e o scale-in natural é conservador (leva mais de dez minutos);
+- **ordem dos passos**: o `make scale-demo` precisa começar com uma instância. Se ele encontrar duas, normaliza sozinho antes de demonstrar e diz isso no log, então você não precisa esperar nem fazer nada.
 
 Se o widget estiver vazio logo depois do comando, recarregue depois de um ou dois minutos: a métrica é publicada com atraso próprio.
 
@@ -1205,7 +1216,7 @@ Registre o que mudou entre concorrência 1 e concorrência 8: o p50 subiu? O p95
 **21. Prove a elasticidade 1→2→1**
 
 ```bash
-make scale-demo
+make scale-demo DURACAO=120
 ```
 
 > [!CAUTION]
@@ -1260,6 +1271,13 @@ O `make scale-demo` acabou de provar a subida e a volta por `DescribeEndpoint`, 
 
 > [!IMPORTANT]
 > Espere **cerca de um minuto** depois do comando terminar antes de recarregar; se o widget ainda estiver reto em 1, recarregue de novo depois de outro minuto. E não espere precisão de cronômetro: a janela real com duas instâncias dura pouco de propósito (numa execução medimos cerca de 45 segundos), mas a métrica tem granularidade de 60 segundos e a instância que sai continua reportando por alguns minutos — então o degrau no gráfico aparece mais largo do que foi, e demora alguns minutos para voltar a 1. O gráfico conta a história certa; o cronômetro exato é a saída do Passo 21, no seu terminal.
+
+Com `DURACAO=120` o comando faz duas coisas a mais, e as duas são para o painel: **segura as duas instâncias no ar por dois minutos** (sem isso o degrau sai com um ponto só, porque a métrica de host publica um ponto por minuto) e **mantém tráfego leve ao fundo** durante todo o ciclo.
+
+O tráfego de fundo é o que faz o widget vizinho, "A carga se distribuiu?", finalmente mostrar a distribuição. Com uma instância as duas séries coincidem; com duas atendendo, a série "por instância" cai para perto da **metade** do total. Numa execução real o minuto com duas instâncias marcou 42 chamadas no total e 21 por instância — exatamente 2,00x. É a prova de que a segunda máquina não está só existindo, está atendendo.
+
+> [!NOTE]
+> A contagem de instâncias pode **oscilar** de um minuto para outro no meio do degrau: ela vem do número de instâncias que reportaram CPU no minuto, e um minuto de transição pode ler 1 enquanto a segunda máquina entra ou sai. Se você vir um vale no meio do platô, não é erro seu.
 
 O widget "As instâncias estão de pé? (CPU %)", na linha 4, é o complemento: é lá que você confirma que o assíncrono realmente desligou quando a capacidade voltou a zero — a série simplesmente deixa de ter dado.
 

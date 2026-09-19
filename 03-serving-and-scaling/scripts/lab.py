@@ -533,15 +533,29 @@ def cmd_load(args: argparse.Namespace) -> int:
 
     rows = read_csv_rows(DATA_DIR / TEST_FEATURES_FILE)
 
+    # `--duracao` reparte a janela entre os níveis da matriz, um por fatia. Com 180s
+    # e três níveis, cada concorrência ocupa um minuto — e no painel isso aparece
+    # como três degraus, em vez de uma rajada única onde os três níveis se somam
+    # dentro do mesmo intervalo de 60s da métrica.
+    duracao = max(0, int(getattr(args, "duracao", 0) or 0))
+    fatia = duracao / len(cfg.load_test_matrix) if duracao else 0.0
+    if fatia:
+        log(f"[load] cada um dos {len(cfg.load_test_matrix)} níveis vai ocupar ~{fatia:.0f}s")
+
     levels = []
     for level in cfg.load_test_matrix:
         body = rows[0]
         result = metrics.run_load_level(
-            session, endpoint_name, body, concurrency=level["concurrency"], requests=level["requests"]
+            session,
+            endpoint_name,
+            body,
+            concurrency=level["concurrency"],
+            requests=level["requests"],
+            duration_s=fatia,
         )
         levels.append(result)
         log(
-            f"[load] concurrency={level['concurrency']:<3} requests={level['requests']:<4} "
+            f"[load] concurrency={level['concurrency']:<3} requests={result['requests']:<4} "
             f"success_rate={result['success_rate']} p50={result['p50_ms']}ms p95={result['p95_ms']}ms "
             f"rps={result['requests_per_second']}"
         )
@@ -549,6 +563,8 @@ def cmd_load(args: argparse.Namespace) -> int:
     min_rate = cfg.load_test_min_success_rate
     overall_ok = all(level["success_rate"] >= min_rate for level in levels)
     result = {"endpoint_name": endpoint_name, "levels": levels, "min_success_rate_required": min_rate, "passed": overall_ok}
+    if duracao:
+        result["duration_s"] = duracao
 
     _write_result("load.json", result)
     emit(result)
@@ -570,25 +586,70 @@ def cmd_scale_demo(args: argparse.Namespace) -> int:
     timeout = cfg.scale_demo_wait_timeout_s
     target = cfg.scale_demo_target_min_capacity
 
-    before = aws.describe_endpoint(session, endpoint_name)["ProductionVariants"][0]["CurrentInstanceCount"]
-    log(f"[scale] antes: {before}")
+    observado = aws.describe_endpoint(session, endpoint_name)["ProductionVariants"][0]["CurrentInstanceCount"]
+    log(f"[scale] antes: {observado}")
 
-    log(f"[scale] subindo MinCapacity/MaxCapacity para {target} para forçar um scale-out determinístico")
-    aws.register_scalable_target_min_capacity(session, resource_id, min_capacity=target, max_capacity=target)
-    scaled = aws.wait_instance_count(session, endpoint_name, target_count=target, timeout_seconds=timeout)
-    aws.wait_endpoint_in_service(session, endpoint_name, timeout_seconds=timeout)
-    log(f"[scale] escalado: {scaled}")
+    # A demonstração é 1 -> 2 -> 1, então ela precisa COMEÇAR em 1. Se o endpoint
+    # já estiver com mais de uma instância, normaliza antes de começar: acontece de
+    # verdade depois de `make load DURACAO=...`, cujo tráfego sustentado fica muito
+    # acima do alvo da política e provoca um scale-out legítimo. Esperar o scale-in
+    # natural levaria mais de dez minutos, o que não cabe numa aula.
+    if observado != 1:
+        log(f"[scale] encontrei {observado} instâncias (provável scale-out do tráfego anterior); normalizando para 1 antes de demonstrar")
+        aws.register_scalable_target_min_capacity(session, resource_id, min_capacity=1, max_capacity=2)
+        aws.set_endpoint_desired_capacity(session, endpoint_name, desired_instance_count=1)
+        aws.wait_instance_count(session, endpoint_name, target_count=1, timeout_seconds=timeout)
+        aws.wait_endpoint_in_service(session, endpoint_name, timeout_seconds=timeout)
+        log("[scale] normalizado: 1")
+    before = 1
 
-    log("[scale] restaurando MinCapacity=1, MaxCapacity=2 (valores gerenciados pelo Terraform, sem deixar drift)")
-    aws.register_scalable_target_min_capacity(session, resource_id, min_capacity=1, max_capacity=2)
-    log("[scale] forçando DesiredInstanceCount de volta para 1: baixar só o MaxCapacity não faz o "
-        "Application Auto Scaling reduzir, isso só acontece quando o alarme de target tracking avalia")
-    aws.set_endpoint_desired_capacity(session, endpoint_name, desired_instance_count=1)
-    restored = aws.wait_instance_count(session, endpoint_name, target_count=1, timeout_seconds=timeout)
-    aws.wait_endpoint_in_service(session, endpoint_name, timeout_seconds=timeout)
-    log(f"[scale] restaurado: {restored}")
+    # `--duracao` aqui não muda a demonstração: ela liga tráfego LEVE ao fundo
+    # durante todo o ciclo. Sem chamada nenhuma, os gráficos que dependem de
+    # invocação ficam sem dado exatamente no minuto em que a segunda instância
+    # entra, e a distribuição de carga — o que a segunda máquina muda de fato —
+    # não aparece. Com tráfego ao fundo, a série "por instância" cai para perto da
+    # metade do total quando a segunda passa a atender.
+    duracao = max(0, int(getattr(args, "duracao", 0) or 0))
+    corpo = rows_to_body(read_csv_rows(DATA_DIR / TEST_FEATURES_FILE)[:1])
+    trafego = metrics.TrafegoDeFundo(session, endpoint_name, corpo, rps=1.0) if duracao else None
 
-    result = {"endpoint_name": endpoint_name, "before": before, "scaled": scaled, "restored": restored}
+    def ciclo() -> tuple[int, int]:
+        log(f"[scale] subindo MinCapacity/MaxCapacity para {target} para forçar um scale-out determinístico")
+        aws.register_scalable_target_min_capacity(session, resource_id, min_capacity=target, max_capacity=target)
+        escalado = aws.wait_instance_count(session, endpoint_name, target_count=target, timeout_seconds=timeout)
+        aws.wait_endpoint_in_service(session, endpoint_name, timeout_seconds=timeout)
+        log(f"[scale] escalado: {escalado}")
+
+        # Segura as duas instâncias no ar por um tempo antes de restaurar: a métrica
+        # de host publica um ponto por minuto, então sem essa pausa o degrau do
+        # painel sai com um ponto só (ou nenhum, se a janela fechar no meio).
+        if duracao:
+            log(f"[scale] mantendo {target} instâncias por {duracao}s para o painel registrar o degrau")
+            time.sleep(duracao)
+
+        log("[scale] restaurando MinCapacity=1, MaxCapacity=2 (valores gerenciados pelo Terraform, sem deixar drift)")
+        aws.register_scalable_target_min_capacity(session, resource_id, min_capacity=1, max_capacity=2)
+        log("[scale] forçando DesiredInstanceCount de volta para 1: baixar só o MaxCapacity não faz o "
+            "Application Auto Scaling reduzir, isso só acontece quando o alarme de target tracking avalia")
+        aws.set_endpoint_desired_capacity(session, endpoint_name, desired_instance_count=1)
+        restaurado = aws.wait_instance_count(session, endpoint_name, target_count=1, timeout_seconds=timeout)
+        aws.wait_endpoint_in_service(session, endpoint_name, timeout_seconds=timeout)
+        log(f"[scale] restaurado: {restaurado}")
+        return escalado, restaurado
+
+    if trafego is not None:
+        with trafego:
+            scaled, restored = ciclo()
+        log(f"[scale] tráfego de fundo: {trafego.chamadas} chamadas, {trafego.falhas} falhas")
+    else:
+        scaled, restored = ciclo()
+
+    # `before` é a contagem no instante em que a demonstração começou; `observed_before`
+    # guarda o que havia antes da normalização, para a evidência não perder o fato.
+    result = {"endpoint_name": endpoint_name, "before": before, "observed_before": observado, "scaled": scaled, "restored": restored}
+    if duracao:
+        result["duration_s"] = duracao
+        result["background_requests"] = trafego.chamadas if trafego else 0
     _write_result("scale.json", result)
     emit(result)
     return 0 if (before == 1 and scaled == target and restored == 1) else 1
@@ -719,12 +780,12 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         p = sub.add_parser(name)
         p.set_defaults(func=func)
-        if name == "compare":
+        if name in {"compare", "load", "scale-demo"}:
             p.add_argument(
                 "--duracao",
                 type=int,
                 default=0,
-                help="segundos de tráfego contínuo nos dois endpoints; 0 usa a rajada curta",
+                help="segundos de tráfego sustentado, para o painel desenhar linha em vez de ponto; 0 usa o modo curto",
             )
 
     return parser

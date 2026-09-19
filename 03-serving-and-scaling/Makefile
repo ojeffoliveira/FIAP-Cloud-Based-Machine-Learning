@@ -68,7 +68,7 @@ apply: validate-data validate ## Provisiona storage + bootstrap de treino, port�
 status: ## Descreve endpoints, configs e scalable targets em JSON
 	@$(PYTHON) $(SCRIPTS)/lab.py status
 
-dashboard: ## Imprime o link direto do painel do CloudWatch deste laboratório
+dashboard: ## Imprime os links dos dois painéis do CloudWatch (o do lab e o de observação ao vivo)
 	@$(PYTHON) $(SCRIPTS)/lab.py dashboard
 
 compare: ## Smoke + latência, real-time vs serverless (DURACAO=180 mantém tráfego por 3 min)
@@ -80,11 +80,11 @@ async: ## Sobe o payload para o S3, InvokeEndpointAsync, espera e valida a saíd
 batch: ## CreateTransformJob para as 600 linhas de teste, espera e valida as 600 saídas
 	@$(PYTHON) $(SCRIPTS)/lab.py batch
 
-load: ## Teste de carga no endpoint real-time com concorrência 1/4/8
-	@$(PYTHON) $(SCRIPTS)/lab.py load
+load: ## Carga no real-time com concorrência 1/4/8 (DURACAO=180 dá um minuto a cada nível)
+	@$(PYTHON) $(SCRIPTS)/lab.py load $(if $(DURACAO),--duracao $(DURACAO),)
 
-scale-demo: ## Prova 1->2->1 instâncias via Application Auto Scaling e restaura a config
-	@$(PYTHON) $(SCRIPTS)/lab.py scale-demo
+scale-demo: ## Prova 1->2->1 instâncias e restaura (DURACAO=120 segura o degrau e gera tráfego de fundo)
+	@$(PYTHON) $(SCRIPTS)/lab.py scale-demo $(if $(DURACAO),--duracao $(DURACAO),)
 
 evidence: ## Consolida os resultados conferíveis em artifacts/evidence/
 	@$(PYTHON) $(SCRIPTS)/lab.py evidence > /dev/null
