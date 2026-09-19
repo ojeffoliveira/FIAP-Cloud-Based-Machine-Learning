@@ -828,17 +828,21 @@ make compare DURACAO=180
 
 O comando mantém chamadas nos dois endpoints por três minutos, alternando entre eles, e você vê as duas séries se desenhando ao vivo.
 
-> Saída esperada (o texto das linhas é fixo; as contagens e os tempos são da sua execução):
+> Saída esperada (contagens e tempos são medidos na sua execução; estes são de uma execução real):
 > ```text
 > [compare] mantendo tráfego nos dois endpoints por 180s (cada minuto vira um ponto no painel)
-> [compare] faltam ~165s | chamadas: realtime=… serverless=…
-> [compare] faltam ~150s | chamadas: realtime=… serverless=…
-> [compare] realtime   chamadas=… first=…ms warm_p50=…ms warm_p95=…ms
-> [compare] serverless chamadas=… first=…ms warm_p50=…ms warm_p95=…ms
+> [compare] faltam ~164s | chamadas: realtime=16 serverless=16
+> [compare] faltam ~149s | chamadas: realtime=31 serverless=31
+> [compare] realtime   chamadas=179 first=613.27ms warm_p50=449.194ms warm_p95=476.596ms
+> [compare] serverless chamadas=179 first=6848.669ms warm_p50=471.603ms warm_p95=513.715ms
 > [compare] predictions_match=True (tolerância 1e-06)
 > ```
 
 `predictions_match=True` é o que importa mais do que os milissegundos: prova que o mesmo artefato responde igual nos dois modos.
+
+Repare no contraste entre as duas linhas de latência. A primeira chamada ao serverless custou **6,8 segundos** contra 613 ms no real-time; depois de aquecido, os dois andam juntos (471 ms contra 449 ms no p50). Esse é o comportamento de "primeira chamada" que a Helena precisa entender antes de escolher serverless para o app: a conta chega inteira só na primeira invocação depois de um período ocioso.
+
+No painel ao vivo, a mesma execução desenhou quatro pontos por série (33, 64, 66 e 16 chamadas por minuto) — a linha que a rajada curta não produzia.
 
 ![](img/06-make-compare.png)
 
@@ -856,6 +860,8 @@ Sem o parâmetro, o comando faz 1 chamada isolada e 20 chamadas seguidas, tudo e
 Com `DURACAO`, o comando alterna chamadas entre os dois endpoints até o tempo acabar. A alternância não é detalhe: se o real-time recebesse os três minutos inteiros e só depois o serverless, as duas séries ficariam em janelas de tempo diferentes e o painel mostraria dois picos separados, não uma comparação.
 
 O resultado gravado em `compare.json` ganha dois campos a mais nesse modo (`requests` por endpoint e `duration_s`), e o `success_rate` passa a ser medido de verdade em vez de fixo em 1.0 — numa janela de três minutos uma chamada pode falhar sem que isso invalide a medição.
+
+Uma interação que vale conhecer antes de aumentar a duração: o ritmo é de aproximadamente uma chamada por segundo em cada endpoint, ou seja perto de 60 por minuto — exatamente o alvo da política de scaling do real-time. Numa execução real o pico bateu 66 chamadas num minuto e o endpoint **não** escalou, porque target tracking exige violação sustentada. Com uma duração bem maior, ele pode escalar para duas instâncias no meio da Parte 4, o que não quebra nada mas antecipa a história da Parte 6 (e cobra a segunda instância enquanto durar).
 
 </blockquote>
 </details>
