@@ -245,6 +245,96 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# resumo
+# --------------------------------------------------------------------------- #
+
+
+def _le_evidencia(nome: str) -> dict | None:
+    caminho = EVIDENCE_DIR / nome
+    if not caminho.exists():
+        return None
+    with open(caminho, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def cmd_resumo(_args: argparse.Namespace) -> int:
+    """Imprime os números medidos até agora, na ordem das linhas do DECISION.md.
+
+    Existe para o aluno não precisar caçar `artifacts/evidence/*.json` no explorador
+    de arquivos: a pasta está no .gitignore, aparece esmaecida e fica três níveis
+    abaixo. O passo pede um julgamento, não uma busca por arquivo.
+    """
+    compare = _le_evidencia("compare.json")
+    async_r = _le_evidencia("async.json")
+    batch = _le_evidencia("batch.json")
+    load = _le_evidencia("load.json")
+    scale = _le_evidencia("scale.json")
+
+    linhas: list[str] = []
+    falta: list[str] = []
+
+    linhas.append("ATENDIMENTO HUMANO e APP COM RAJADAS  (Passo 14)")
+    if compare:
+        for modo, rotulo in (("realtime", "Atendimento (real-time)"), ("serverless", "App (serverless)")):
+            x = compare.get(modo, {})
+            linhas.append(
+                f"  {rotulo:<26} primeira={x.get('first_ms')}ms  p50={x.get('warm_p50_ms')}ms  p95={x.get('warm_p95_ms')}ms"
+            )
+        linhas.append(f"  {'predições equivalentes':<26} {compare.get('predictions_match')}")
+    else:
+        falta.append("make compare")
+
+    linhas.append("")
+    linhas.append("IMPORTAÇÃO DE ARQUIVO PESADO  (Passo 18)")
+    if async_r:
+        linhas.append(
+            f"  entrada={async_r.get('input_count')} linhas  saída={async_r.get('output_count')} predições"
+        )
+        linhas.append(f"  capacidade antes={async_r.get('capacity_before')} depois={async_r.get('capacity_after_observation')}")
+        linhas.append(f"  saída em {async_r.get('output_uri')}")
+    else:
+        falta.append("make async")
+
+    linhas.append("")
+    linhas.append("CAMPANHA NOTURNA  (Passo 18)")
+    if batch:
+        linhas.append(f"  status={batch.get('status')}  saída={batch.get('output_count')} predições")
+        linhas.append(f"  sem endpoint persistente: o job existiu e terminou")
+    else:
+        falta.append("make batch")
+
+    linhas.append("")
+    linhas.append("CONCORRÊNCIA E THROUGHPUT  (Passo 20)")
+    if load:
+        for nivel in load.get("levels", []):
+            linhas.append(
+                f"  concorrência {nivel['concurrency']:<2} chamadas={nivel['requests']:<5} "
+                f"p50={nivel['p50_ms']}ms p95={nivel['p95_ms']}ms p99={nivel['p99_ms']}ms rps={nivel['requests_per_second']}"
+            )
+    else:
+        falta.append("make load")
+
+    if scale:
+        linhas.append("")
+        linhas.append("ELASTICIDADE  (Passo 21)")
+        linhas.append(f"  antes={scale.get('before')} escalado={scale.get('scaled')} restaurado={scale.get('restored')}")
+        if scale.get("observed_before") not in (None, scale.get("before")):
+            linhas.append(f"  (havia {scale.get('observed_before')} instâncias antes da normalização)")
+
+    for linha in linhas:
+        log(linha)
+
+    if falta:
+        log("")
+        log("Ainda não medido: " + ", ".join(sorted(set(falta))))
+
+    # stdout carrega o dado bruto, para quem quiser pipar; a leitura humana vai
+    # toda para stderr acima.
+    emit({"compare": compare, "async": async_r, "batch": batch, "load": load, "scale": scale})
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # dashboard
 # --------------------------------------------------------------------------- #
 
@@ -770,6 +860,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("wait-training", cmd_wait_training),
         ("status", cmd_status),
         ("dashboard", cmd_dashboard),
+        ("resumo", cmd_resumo),
         ("compare", cmd_compare),
         ("async", cmd_async),
         ("batch", cmd_batch),

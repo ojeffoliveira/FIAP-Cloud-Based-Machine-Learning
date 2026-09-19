@@ -212,6 +212,7 @@ make help
 >   apply          Provisiona storage + bootstrap de treino, portão, e então 3 endpoints + autoscaling
 >   status         Descreve endpoints, configs e scalable targets em JSON
 >   dashboard      Imprime os links dos dois painéis do CloudWatch (o do lab e o de observação ao vivo)
+>   resumo         Imprime os números já medidos, na ordem das linhas do DECISION.md
 >   compare        Smoke + latência, real-time vs serverless (DURACAO=180 mantém tráfego por 3 min)
 >   async          Sobe o payload para o S3, InvokeEndpointAsync, espera e valida a saída
 >   batch          CreateTransformJob para as 600 linhas de teste, espera e valida as 600 saídas
@@ -227,7 +228,7 @@ make help
 >   Manter recursos: make e2e KEEP_RESOURCES=1   (você precisa rodar make destroy depois)
 > ```
 
-São 21 comandos, e é a lista inteira do laboratório.
+São 22 comandos, e é a lista inteira do laboratório.
 
 <details>
 <summary><b>💡 Clique para entender: o que cada comando faz de verdade</b></summary>
@@ -246,6 +247,7 @@ São 21 comandos, e é a lista inteira do laboratório.
 | `make apply` | stage 1 (S3 + training bootstrap) → portão (`DescribeTrainingJob` + `HeadObject`) → stage 2 (model + 3 endpoint configs/endpoints + autoscaling) | **sim** | o comando que sobe tudo, em um passo só |
 | `make status` | `DescribeEndpoint`/`DescribeEndpointConfig`/`DescribeScalableTargets` dos três modos | não, só leitura | inventário rápido do que está no ar |
 | `make dashboard` | `GetDashboard` nos dois painéis criados pelo estágio 2 e imprime os dois links | não, só leitura | os painéis são a superfície visual do lab; você não precisa achar o nome deles no console |
+| `make resumo` | lê os JSON de `artifacts/evidence/` que já existem e imprime os números agrupados pelas linhas do `DECISION.md` | não, nem toca a AWS | você preenche a decisão lendo o terminal, sem caçar arquivo no explorador |
 | `make compare` | 1 chamada + 20 chamadas warm, real-time e serverless, com o mesmo payload fixo. Com `DURACAO=180`, alterna chamadas nos dois endpoints por 3 minutos em vez da rajada curta | invocações pequenas | mede latência e prova que as predictions batem; a duração existe para o painel ter linha em vez de ponto |
 | `make async` | sobe payload no S3, `InvokeEndpointAsync`, espera o output aparecer no S3 | sim, pequeno | prova o desacoplamento request/resposta |
 | `make batch` | `CreateTransformJob` via Boto3 nos 600 registros de teste | sim, efêmero | prova computação sem endpoint persistente |
@@ -926,10 +928,21 @@ Se os dois gráficos estiverem completamente vazios, recarregue depois de um ou 
 
 ```bash
 cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling
+make resumo
 code DECISION.md
 ```
 
-Com `artifacts/evidence/compare.json` aberto ao lado, responda na linha "Atendimento" e "App após fechamento da fatura" da tabela de evidências: qual comportamento você aceitaria para atendimento humano, e qual para o app com rajadas?
+O `make resumo` imprime no terminal os números já medidos, agrupados pelas mesmas linhas da tabela do `DECISION.md` — você não precisa procurar arquivo nenhum. Ele lê os JSON de `artifacts/evidence/`, que ficam fora do controle de versão e por isso aparecem esmaecidos no explorador.
+
+> Saída esperada (a parte que interessa neste passo):
+> ```text
+> ATENDIMENTO HUMANO e APP COM RAJADAS  (Passo 14)
+>   Atendimento (real-time)    primeira=613.27ms  p50=449.194ms  p95=476.596ms
+>   App (serverless)           primeira=6848.669ms  p50=471.603ms  p95=513.715ms
+>   predições equivalentes     True
+> ```
+
+Com esses números à vista, responda nas linhas "Atendimento" e "App após fechamento da fatura" da tabela de evidências: qual comportamento você aceitaria para atendimento humano, e qual para o app com rajadas?
 
 ### Checkpoint
 
@@ -1117,10 +1130,11 @@ Por isso o widget usa uma expressão `SEARCH` pelo prefixo do laboratório em ve
 
 ```bash
 cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling
+make resumo
 code DECISION.md
 ```
 
-Preencha as linhas "Importação de arquivo pesado" e "Campanha noturna" na tabela de evidências, usando `artifacts/evidence/async.json` e `artifacts/evidence/batch.json`. A pergunta que importa: por que o batch não precisa de endpoint e o async precisa?
+Use as seções "IMPORTAÇÃO DE ARQUIVO PESADO" e "CAMPANHA NOTURNA" da saída do `make resumo` para preencher as linhas correspondentes na tabela de evidências. A pergunta que importa: por que o batch não precisa de endpoint e o async precisa?
 
 ### Checkpoint
 
@@ -1200,10 +1214,11 @@ Se o widget estiver vazio logo depois do comando, recarregue depois de um ou doi
 
 ```bash
 cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling
+make resumo
 code DECISION.md
 ```
 
-Registre o que mudou entre concorrência 1 e concorrência 8: o p50 subiu? O p95 subiu mais que o p50? O RPS acompanhou a concorrência ou saturou? Não declare "melhor" por um único número: throughput e latência respondem perguntas diferentes.
+A seção "CONCORRÊNCIA E THROUGHPUT" do `make resumo` traz os três níveis lado a lado. Registre o que mudou entre concorrência 1 e concorrência 8: o p50 subiu? O p95 subiu mais que o p50? O RPS acompanhou a concorrência ou saturou? Não declare "melhor" por um único número: throughput e latência respondem perguntas diferentes.
 
 ---
 
