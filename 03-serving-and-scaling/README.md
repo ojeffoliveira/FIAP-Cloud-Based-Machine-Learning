@@ -1309,8 +1309,7 @@ A primeira versão deste painel calculava a contagem de outra forma, dividindo `
 </blockquote>
 </details>
 
-> 📸 **Nota do autor (não é tarefa sua)** — capturar o widget da contagem de instâncias com a curva 1 → 2 → 1 completa. É a imagem que resume a Parte 6.
-<!-- ![](img/painel-elasticidade.png) -->
+![](img/painel-elasticidade.png)
 
 ---
 
