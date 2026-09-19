@@ -745,8 +745,8 @@ make dashboard
 
 > Saída esperada (os links são os seus; os nomes dos painéis são iguais para todo mundo):
 > ```text
->   Painel do lab       : prb-cloud-ml-lab2-serving (11 widgets, janela de 1 hora)
->   Painel ao vivo      : prb-cloud-ml-lab2-serving-ao-vivo (4 widgets, janela de 5 minutos)
+>   Painel do lab       : prb-cloud-ml-lab2-serving-8f7c85b8 (11 widgets, janela de 1 hora)
+>   Painel ao vivo      : prb-cloud-ml-lab2-serving-ao-vivo-8f7c85b8 (4 widgets, janela de 5 minutos)
 >
 >   Deixe o painel do lab aberto do começo ao fim. Ele atualiza sozinho
 >   conforme novas métricas chegam (granularidade de 60 s).
@@ -755,11 +755,11 @@ make dashboard
 >   últimos 5 minutos, e você ajusta o intervalo de atualização para 10 s no
 >   seletor do canto superior direito do console.
 >
-> https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/prb-cloud-ml-lab2-serving
-> https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/prb-cloud-ml-lab2-serving-ao-vivo
+> https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/prb-cloud-ml-lab2-serving-8f7c85b8
+> https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/prb-cloud-ml-lab2-serving-ao-vivo-8f7c85b8
 > ```
 
-São **dois painéis**, e eles têm usos diferentes. O primeiro link é o painel do laboratório: onze widgets, janela de uma hora, e é o que você deixa aberto do começo ao fim. O segundo é o painel de observação ao vivo, com três gráficos e janela de cinco minutos, usado só na Parte 4, para assistir a comparação acontecendo. Abra o primeiro agora.
+O sufixo do nome muda a cada ciclo de vida, então **o seu link não é igual ao do exemplo** — use sempre o que o comando imprimiu. São **dois painéis**, e eles têm usos diferentes. O primeiro link é o painel do laboratório: onze widgets, janela de uma hora, e é o que você deixa aberto do começo ao fim. O segundo é o painel de observação ao vivo, com três gráficos e janela de cinco minutos, usado só na Parte 4, para assistir a comparação acontecendo. Abra o primeiro agora.
 
 O `make apply` criou os dois junto com os endpoints. **Deixe a aba do painel do laboratório aberta**: as linhas dele acompanham as Partes 4, 5 e 6, e é nele que você vai comparar os padrões de serving em vez de somar números de cabeça.
 
@@ -816,11 +816,7 @@ Predictions equivalentes entre real-time e serverless, com o perfil de latência
 
 Antes de rodar, abra o **painel de observação ao vivo** numa aba nova. Ele é o segundo link que o Passo 12.1 imprimiu:
 
-```text
-https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/prb-cloud-ml-lab2-serving-ao-vivo
-```
-
-Se não tiver o link à mão, `make dashboard` imprime os dois de novo. Esse painel já abre mostrando os **últimos 5 minutos**. Falta um ajuste que só existe no console: no canto superior direito, **mude o intervalo de atualização para 10 segundos**. Feito isso, deixe a aba visível e rode:
+Se não tiver o link à mão, `make dashboard` imprime os dois de novo — e é o dele que vale, porque o nome do painel carrega o sufixo do seu ciclo de vida. Esse painel já abre mostrando os **últimos 5 minutos**. Falta um ajuste que só existe no console: no canto superior direito, **mude o intervalo de atualização para 10 segundos**. Feito isso, deixe a aba visível e rode:
 
 ```bash
 make compare DURACAO=180

@@ -27,13 +27,17 @@ locals {
   realtime_scaling_policy_name = "${var.project_prefix}-rt-target"
   async_scaling_policy_name    = "${var.project_prefix}-async-target"
 
-  # Sem o sufixo do ciclo de vida, ao contrário dos endpoints: o dashboard não é
-  # um recurso que o SageMaker recuse recriar com o mesmo nome, e um nome estável
-  # é o que permite o `verify-clean` achá-lo só pelo prefixo, do mesmo jeito que
-  # ele acha o bucket.
-  dashboard_name = "${var.project_prefix}-serving"
-  # Mesmo prefixo, para o verify-clean achar os dois de uma vez.
-  dashboard_live_name = "${var.project_prefix}-serving-ao-vivo"
+  # COM o sufixo do ciclo de vida, como os endpoints. A primeira versão usava nome
+  # fixo, com o argumento de que o `verify-clean` acha pelo prefixo — o que é
+  # verdade, e continua verdade com sufixo, porque a busca é por prefixo.
+  #
+  # O nome fixo custou um diagnóstico difícil: com dois ciclos de vida vivos na
+  # mesma conta (duas pessoas rodando o lab, ou um apply novo antes de destruir o
+  # anterior), o segundo apply SOBRESCREVE o painel do primeiro. O painel continua
+  # abrindo e mostrando zero, porque aponta para os endpoints do outro ciclo — e
+  # nada na tela avisa isso. Com o sufixo, cada ciclo tem o seu painel.
+  dashboard_name      = "${var.project_prefix}-serving-${local.suffix}"
+  dashboard_live_name = "${var.project_prefix}-serving-ao-vivo-${local.suffix}"
 
   data_dir = "${path.module}/${var.data_dir}"
 
