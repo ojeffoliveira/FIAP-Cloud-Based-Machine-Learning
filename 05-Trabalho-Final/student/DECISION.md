@@ -12,6 +12,44 @@
 **Equipe:** <preencher>
 **Data:** <preencher>
 
+## Evidências da nossa execução
+
+<!-- A tabela abaixo é preenchida pelo `make resumo` com os números da SUA execução.
+     Não edite à mão: o bloco entre os marcadores é regravado a cada `make resumo`.
+     O que vocês escrevem neste documento são as seções de decisão abaixo — a
+     tabela é só o dado bruto para vocês citarem nelas. -->
+<!-- inicio-evidencias -->
+| Elo da cadeia | Fonte | O que medimos na sua execução |
+|---|---|---|
+| Treino e artefato | `training.json + artifact.json` | _rode `make deploy`_ |
+| Atendimento e campanha | `atendimento.json + campanha.json` | _rode `make run`_ |
+| Janela saudável | `baseline-drift.json` | _rode `make baseline`_ |
+| Janela deslocada | `production-drift.json` | _rode `make drift`_ |
+| Alarme e reação automática | `alarm.json + reaction.json` | _rode `make alarm-status`_ |
+| Qualidade com ground truth | `quality.json` | _rode `make ground-truth`_ |
+<!-- fim-evidencias -->
+
+<details>
+<summary>💡 O que significam os números da tabela</summary>
+
+| Termo | Em português claro |
+|---|---|
+| **PSI** (Population Stability Index) | Mede o quanto a distribuição de uma variável (ou das predições) mudou entre a referência e a janela observada. Não olha rótulo, só a forma do histograma. Abaixo de ~0,10 é ruído de amostragem; acima do limiar (0,20 neste trabalho) é mudança que merece atenção. |
+| **Janela baseline vs. shifted** | `baseline` é a janela "saudável", parecida com o mundo em que `churn-v1` foi treinado. `shifted` é a janela depois do reajuste de preço e da mudança de política comercial. As duas podem contar histórias diferentes ao mesmo tempo. |
+| **Drift de dados vs. drift de predição** | O primeiro mede se as features de entrada mudaram de distribuição; o segundo mede se a saída do modelo (a probabilidade prevista) mudou. Um pode se mover sem o outro. |
+| **Ground truth** | O rótulo verdadeiro (o cliente cancelou ou não), que só chega depois da predição. Sem ele não existe F1 nem ROC-AUC — só PSI, que não olha acerto, só distribuição. |
+| **F1** | Média entre precisão e recall. Cai quando o modelo passa a errar mais, para qualquer lado (prevendo churn demais ou de menos). A matriz de confusão é que diz **para qual lado**. |
+| **ROC-AUC** | O quão bem o modelo ordena clientes por risco, independente do ponto de corte escolhido. 0,50 é chute puro; 1,00 é ordenação perfeita. |
+| **Falso positivo / falso negativo** | Falso positivo: o modelo previu cancelamento e o cliente não ia cancelar (custo: ação de retenção desnecessária). Falso negativo: o modelo não viu risco e o cliente cancelou de fato (custo: receita perdida sem qualquer tentativa de retenção). |
+| **Padrão de serving** (Real-Time / Serverless / Async / Batch) | A forma como o modelo é consultado — nunca muda o modelo em si, só como a predição chega até quem precisa dela. |
+| **p50 / p95** | Metade das chamadas respondeu em até o p50; 95% respondeu em até o p95. Aparecem em `candidates.md`, não nesta tabela — o comparativo de latência é gerado por `make compare`, antes de vocês escolherem o pattern. |
+
+Por que a média não aparece: dez chamadas de 100 ms e uma de 5 segundos dão média de
+545 ms, e ninguém viveu essa experiência — nem a rápida, nem a lenta. p50/p95 descrevem
+o que a maioria de fato sentiu; a média só esconde o outlier.
+
+</details>
+
 ## Resumo executivo
 
 > *Em três ou quatro frases, sem jargão de ML: o que vocês decidiram para atendimento e

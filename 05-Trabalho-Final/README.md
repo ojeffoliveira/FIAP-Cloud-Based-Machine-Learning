@@ -1,5 +1,10 @@
 # 05 - Trabalho Final: Bora Fibra — do modelo à decisão operacional
 
+<!-- Convenção de prints deste README: o marcador 📸 sempre nomeia o painel exato (nome
+     completo, sem sufixo) e os títulos exatos dos quadros entre aspas, na mesma ordem em
+     que aparecem no dashboard. A captura é responsabilidade de quem está executando o
+     trabalho nesta rodada — guarde o print junto da sua entrega, ele não entra no zip. -->
+
 > Antes de começar, confirme o ambiente em [01-create-codespaces/README.md](../01-create-codespaces/README.md) e o ritual de [início de aula](../01-create-codespaces/Inicio-de-aula.md). Todos os comandos abaixo rodam dentro do Codespaces da disciplina, a partir de `/workspaces/FIAP-Cloud-Based-Machine-Learning/05-Trabalho-Final`.
 
 > [!IMPORTANT]
@@ -161,7 +166,8 @@ make run
 
 > Uma sequência de blocos: validação do YAML, atendimento (40 clientes, um por vez), campanha (600 clientes em lote), publicação da janela `baseline`, publicação da janela `shifted` (drift), estado dos alarmes, confirmação do incidente aberto pela Lambda, avaliação de qualidade com o ground truth atrasado, e por fim `artifacts/evidence/evidence.md` fechado com a cadeia inteira registrada.
 
-> 📸 **Print obrigatório:** abra o link de `dashboard_url` (impresso por `make deploy` ou por `make dashboard`) e capture a tela do CloudWatch depois que `make run` publicar as duas janelas. É a única evidência visual exigida neste trabalho — o resto da prova é o dossiê estruturado em `artifacts/evidence/`, não uma captura de tela. Guarde o print junto com a sua entrega; ele não entra automaticamente no zip.
+> 📸 **Print obrigatório** — abra o link de `dashboard_url` (impresso por `make deploy` ou por `make dashboard`) e, no painel **fiap-final-&lt;student_id&gt;-dashboard** (nome completo na saída desses comandos), capture pelo menos os quadros **"Os dados ainda parecem os mesmos? (PSI máximo por feature)"**, **"A regra virou incidente? (estado dos dois alarmes)"** e **"A qualidade aguentou? (F1, quando o ground truth chega)"**, depois que `make run` publicar as duas janelas (`baseline` e `shifted`). É a única evidência visual exigida neste trabalho — o resto da prova é o dossiê estruturado em `artifacts/evidence/`, não uma captura de tela. Se algum quadro estiver vazio, recarregue depois de um ou dois minutos — a métrica é publicada com atraso. Guarde o print junto com a sua entrega; ele não entra automaticamente no zip.
+<!-- ![](img/dashboard-baseline-shifted.png) -->
 
 <details>
 <summary>⚠ Se der erro: <code>TODO</code> não substituído ou valor inválido no YAML</summary>
@@ -173,6 +179,13 @@ make run
 **7.** Interprete `artifacts/evidence/evidence.md` — veja a seção [Interpretando a evidência](#interpretando-a-evidência) abaixo para saber como ler, não o que concluir.
 
 **8.** Preencha as 10 seções de `student/DECISION.md` — veja [O DECISION.md](#o-decisionmd).
+
+```bash
+make resumo
+code student/DECISION.md
+```
+
+O `make resumo` faz duas coisas: imprime no terminal as frases com os números medidos nesta sua execução e **escreve a tabela de evidências direto no `DECISION.md`**, entre os marcadores `<!-- inicio-evidencias -->` e `<!-- fim-evidencias -->`. Você abre o documento já com a cadeia inteira preenchida — treino, atendimento e campanha, PSI da janela saudável, PSI da janela com drift, alarme e reação, F1/ROC-AUC com o ground truth — e o que resta escrever é só a decisão, nas dez seções abaixo da tabela.
 
 Se você voltar depois e trocar `student/solution.yaml`, repita só os passos 5 a 8: `make run` nunca reprovisiona nem retreina, então uma segunda passada custa minutos, não meia hora de novo.
 

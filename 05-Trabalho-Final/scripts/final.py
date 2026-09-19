@@ -6,8 +6,8 @@ Ordem em que o Makefile encadeia os subcomandos ao longo do trabalho:
     doctor -> data -> validate-data -> validate-solution -> train
            -> training-status -> artifact -> status -> compare
            -> atendimento -> campanha -> baseline -> drift -> alarm-status
-           -> reaction -> ground-truth -> dashboard -> evidence -> check
-           -> verify-clean -> package -> validate-package
+           -> reaction -> ground-truth -> dashboard -> evidence -> resumo
+           -> check -> verify-clean -> package -> validate-package
 
 Disciplina de saída, valendo para todo subcomando: **stdout carrega o
 resultado** (o JSON que alguém vai capturar ou pipar), **stderr carrega
@@ -403,6 +403,10 @@ COMMANDS: dict[str, tuple[Callable[[Any, argparse.Namespace], int], str]] = {
     ),
     "dashboard": (_lazy("monitoring", "cmd_dashboard", "A6"), "Imprime nome e link do dashboard"),
     "evidence": (_lazy("evidence", "cmd_evidence", "A7"), "Consolida o dossiê de evidência"),
+    "resumo": (
+        _lazy("evidence", "cmd_resumo", "A7"),
+        "Grava a tabela de evidências em student/DECISION.md e repete no terminal",
+    ),
     "check": (cmd_check, "Verificação pré-finish do que o aluno entregou"),
     "verify-clean": (_lazy("cleanup", "cmd_verify_clean", "A7"), "Prova por API que nada cobrado sobrou"),
     "package": (_lazy("packaging", "cmd_package", "A7"), "Empacota a entrega final"),

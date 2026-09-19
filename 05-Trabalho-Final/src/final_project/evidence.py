@@ -450,6 +450,251 @@ def cmd_evidence(cfg: Config, args: Any) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- #
+# resumo — grava a tabela de evidências dentro de student/DECISION.md
+# --------------------------------------------------------------------------- #
+
+INICIO_EVIDENCIAS = "<!-- inicio-evidencias -->"
+FIM_EVIDENCIAS = "<!-- fim-evidencias -->"
+
+
+def _num(valor: Any, digits: int = 2) -> str:
+    """Número em português de gente: vírgula decimal, sem casas falsas — o
+    JSON chega com seis casas (precisão do cálculo, não da leitura)."""
+    if not isinstance(valor, (int, float)):
+        return "não medido"
+    return f"{valor:.{digits}f}".replace(".", ",")
+
+
+def _pct(fracao: Any) -> str:
+    """Fração para porcentagem redonda: 0.905 -> 90%. Decimal de fração não ajuda decisão."""
+    if not isinstance(fracao, (int, float)):
+        return "não medido"
+    return f"{round(fracao * 100)}%"
+
+
+def _milhar(n: Any) -> str:
+    if not isinstance(n, (int, float)):
+        return "não medido"
+    return f"{n:,.0f}".replace(",", ".")
+
+
+def _tempo(ms: Any) -> str:
+    """Latência em linguagem de gente: arredonda (a terceira casa decimal é
+    ruído de rede, não medição) e troca para segundos acima de 1000 ms."""
+    if not isinstance(ms, (int, float)):
+        return "não medido"
+    if ms >= 1000:
+        return f"{ms / 1000:.1f}".replace(".", ",") + " segundos"
+    return f"{round(ms)} ms"
+
+
+def _read(cfg: Config, name: str) -> dict[str, Any] | None:
+    data, _ = _load_json(cfg.evidence_dir / name)
+    return data
+
+
+def _frases_evidencia(
+    training: dict[str, Any] | None,
+    artifact: dict[str, Any] | None,
+    atendimento: dict[str, Any] | None,
+    campanha: dict[str, Any] | None,
+    baseline_drift: dict[str, Any] | None,
+    production_drift: dict[str, Any] | None,
+    alarm: dict[str, Any] | None,
+    reaction: dict[str, Any] | None,
+    quality: dict[str, Any] | None,
+) -> dict[str, str]:
+    """Uma frase por linha da tabela, escrita para quem não abre JSON."""
+    frases: dict[str, str] = {}
+
+    if training and artifact:
+        metrics = {m.get("name"): m.get("value") for m in training.get("final_metrics", []) if isinstance(m, dict)}
+        frases["treino"] = (
+            f"O training job rodou **{_num(training.get('billable_seconds'), 0)} segundos** "
+            f"de instância `{training.get('instance_type', '?')}`, terminando com AUC de validação "
+            f"**{_num(metrics.get('validation:auc'))}** (treino: {_num(metrics.get('train:auc'))}). "
+            f"O artefato foi confirmado via API (`DescribeTrainingJob` + `HeadObject`), nunca montado "
+            f"por convenção — **{_milhar(artifact.get('content_length'))} bytes** em "
+            f"`{artifact.get('model_artifact_s3_uri', '?').rsplit('/', 1)[-1]}`."
+        )
+
+    if atendimento and campanha:
+        frases["workloads"] = (
+            f"Atendimento (pattern `{atendimento.get('pattern', '?')}`) respondeu "
+            f"**{_milhar(atendimento.get('request_count'))} chamadas** com "
+            f"**{_pct(atendimento.get('success_rate'))} de sucesso**; metade em até "
+            f"**{_tempo(atendimento.get('warm_p50_ms'))}**, primeira chamada em "
+            f"{_tempo(atendimento.get('first_ms'))}. Campanha (pattern `{campanha.get('pattern', '?')}`) "
+            f"processou **{_milhar(campanha.get('input_count'))} clientes** e devolveu "
+            f"**{_milhar(campanha.get('output_count'))} predições** em "
+            f"{_num(campanha.get('duration_seconds'), 0)} segundos."
+        )
+
+    if baseline_drift:
+        frases["baseline"] = (
+            f"Na janela saudável, o PSI máximo de dados ficou em "
+            f"**{_num(_first(baseline_drift, 'data_psi_max', 'data_drift_psi_max', 'psi_max'))}** "
+            f"(limiar {_num(baseline_drift.get('psi_threshold'))}), puxado por "
+            f"`{baseline_drift.get('feature_with_max_psi', '?')}`. PSI das predições: "
+            f"**{_num(_first(baseline_drift, 'prediction_psi', 'prediction_drift_psi'))}** — nenhuma "
+            f"feature cruzou o limiar."
+        )
+
+    if production_drift:
+        features_above = _first(production_drift, "features_above_threshold", "features_above_threshold_list") or []
+        n_acima = len(features_above) if isinstance(features_above, list) else features_above
+        frases["drift"] = (
+            f"Na janela deslocada, o PSI máximo de dados subiu para "
+            f"**{_num(_first(production_drift, 'data_psi_max', 'data_drift_psi_max', 'psi_max'))}**, "
+            f"puxado por `{production_drift.get('feature_with_max_psi', '?')}`; **{n_acima} de 7 variáveis** "
+            f"cruzaram o limiar de {_num(production_drift.get('psi_threshold'))}. PSI das predições: "
+            f"**{_num(_first(production_drift, 'prediction_psi', 'prediction_drift_psi'))}**, com "
+            f"**{_pct(production_drift.get('predicted_churn_rate'))}** dos clientes previstos como churn."
+        )
+
+    if alarm and reaction:
+        estados = [
+            f"`{nome}`: **{info.get('state', '?')}**"
+            for nome, info in (alarm.get("alarms") or {}).items()
+            if isinstance(info, dict)
+        ]
+        payload = reaction.get("incident_payload") or {}
+        frases["alarme"] = (
+            f"Os alarmes foram para {', '.join(estados) if estados else 'não medido'}. A Lambda registrou "
+            f"o incidente em `{reaction.get('key', '?')}`: **{payload.get('status', '?')} / "
+            f"{payload.get('recommended_action', '?')}**. Nenhum training job novo foi disparado — a "
+            f"reação não retreina nem promove modelo sozinha."
+        )
+
+    if quality:
+        comparison = quality.get("comparison") or {}
+        windows = quality.get("windows") if isinstance(quality.get("windows"), dict) else {}
+        baseline_w = windows.get("baseline", {}) if isinstance(windows, dict) else {}
+        shifted_w = windows.get("shifted", {}) if isinstance(windows, dict) else {}
+        confusion = shifted_w.get("confusion_matrix") or {}
+        frases["qualidade"] = (
+            f"Com o rótulo verdadeiro, o F1 caiu de **{_num(baseline_w.get('f1'))}** para "
+            f"**{_num(shifted_w.get('f1'))}** (queda de {_num(comparison.get('f1_drop'))}), e o ROC-AUC "
+            f"caiu **{_num(comparison.get('roc_auc_drop'))}**. Modo de falha: "
+            f"**{comparison.get('failure_mode', '?')}** — a matriz de confusão da janela deslocada mostra "
+            f"**{confusion.get('false_positive', '?')} falsos positivos** contra "
+            f"**{confusion.get('false_negative', '?')} falsos negativos**."
+        )
+
+    return frases
+
+
+def _grava_evidencias_no_decision(cfg: Config, frases: dict[str, str]) -> int:
+    """Reescreve a tabela de evidências do DECISION.md com os números
+    medidos. Só o bloco entre os marcadores é trocado: o que o grupo escreve
+    nas 10 seções de decisão fica intacto, e rodar de novo não duplica nada.
+    Se o arquivo não tiver os marcadores (o grupo apagou sem querer), avisa e
+    não mexe — perder o texto do grupo seria muito pior que deixar a tabela
+    desatualizada."""
+    caminho = cfg.root / "student" / "DECISION.md"
+    if not caminho.exists():
+        log("aviso: student/DECISION.md não encontrado; a tabela não foi atualizada")
+        return 0
+
+    texto = caminho.read_text(encoding="utf-8")
+    if INICIO_EVIDENCIAS not in texto or FIM_EVIDENCIAS not in texto:
+        log("aviso: os marcadores de evidência não estão em student/DECISION.md; a tabela não foi atualizada")
+        return 0
+
+    pendente = {
+        "treino": "_rode `make deploy`_",
+        "workloads": "_rode `make run`_",
+        "baseline": "_rode `make baseline`_",
+        "drift": "_rode `make drift`_",
+        "alarme": "_rode `make alarm-status`_",
+        "qualidade": "_rode `make ground-truth`_",
+    }
+    rotulos = [
+        ("treino", "Treino e artefato", "training.json + artifact.json"),
+        ("workloads", "Atendimento e campanha", "atendimento.json + campanha.json"),
+        ("baseline", "Janela saudável", "baseline-drift.json"),
+        ("drift", "Janela deslocada", "production-drift.json"),
+        ("alarme", "Alarme e reação automática", "alarm.json + reaction.json"),
+        ("qualidade", "Qualidade com ground truth", "quality.json"),
+    ]
+
+    bloco = [
+        INICIO_EVIDENCIAS,
+        "| Elo da cadeia | Fonte | O que medimos na sua execução |",
+        "|---|---|---|",
+        *[f"| {nome} | `{fonte}` | {frases.get(chave, pendente[chave])} |" for chave, nome, fonte in rotulos],
+        FIM_EVIDENCIAS,
+    ]
+
+    caminho.write_text(
+        texto[: texto.index(INICIO_EVIDENCIAS)]
+        + "\n".join(bloco)
+        + texto[texto.index(FIM_EVIDENCIAS) + len(FIM_EVIDENCIAS) :],
+        encoding="utf-8",
+    )
+    return sum(1 for chave, _, _ in rotulos if chave in frases)
+
+
+def cmd_resumo(cfg: Config, args: Any) -> int:
+    """Escreve a tabela de evidências em `student/DECISION.md` e repete as
+    MESMAS frases no terminal — se o terminal dissesse uma coisa e o
+    documento outra, o grupo não saberia em qual confiar."""
+    training = _read(cfg, "training.json")
+    artifact = _read(cfg, "artifact.json")
+    atendimento = _read(cfg, "atendimento.json")
+    campanha = _read(cfg, "campanha.json")
+    baseline_drift = _read(cfg, "baseline-drift.json")
+    production_drift = _read(cfg, "production-drift.json")
+    alarm = _read(cfg, "alarm.json")
+    reaction = _read(cfg, "reaction.json")
+    quality = _read(cfg, "quality.json")
+
+    frases = _frases_evidencia(
+        training, artifact, atendimento, campanha, baseline_drift, production_drift, alarm, reaction, quality
+    )
+    secoes = [
+        ("treino", "TREINO E ARTEFATO", "make deploy"),
+        ("workloads", "ATENDIMENTO E CAMPANHA", "make run"),
+        ("baseline", "JANELA SAUDÁVEL — baseline", "make baseline"),
+        ("drift", "JANELA DESLOCADA — drift", "make drift"),
+        ("alarme", "ALARME E REAÇÃO AUTOMÁTICA", "make alarm-status / make reaction"),
+        ("qualidade", "QUALIDADE COM GROUND TRUTH", "make ground-truth"),
+    ]
+
+    falta: list[str] = []
+    for chave, titulo, comando in secoes:
+        log(titulo)
+        if chave in frases:
+            # O negrito do markdown não ajuda no terminal; sai só no documento.
+            log("  " + frases[chave].replace("**", ""))
+        else:
+            log(f"  ainda não medido — rode `{comando}`")
+            falta.append(comando)
+        log("")
+
+    escritas = _grava_evidencias_no_decision(cfg, frases)
+    log(f"[resumo] student/DECISION.md: tabela de evidências atualizada ({escritas} de {len(secoes)} linhas com dado medido).")
+    if falta:
+        log("[resumo] ainda não medido: " + ", ".join(sorted(set(falta))))
+    log("[resumo] o que resta no arquivo é só a decisão do grupo — a tabela é regravada a cada `make resumo`.")
+
+    _emit(
+        {
+            "training": training,
+            "artifact": artifact,
+            "atendimento": atendimento,
+            "campanha": campanha,
+            "baseline_drift": baseline_drift,
+            "production_drift": production_drift,
+            "alarm": alarm,
+            "reaction": reaction,
+            "quality": quality,
+        }
+    )
+    return 0
+
+
 def cmd_check(cfg: Config, args: Any) -> int:
     """Portão pré-`finish`: solution.yaml sem TODO, DECISION.md sem
     placeholder, evidência completa. Chamado por `make finish` antes de

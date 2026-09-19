@@ -49,7 +49,7 @@ HANDOFF := $(BUILD)/artifact.auto.tfvars.json
 .PHONY: help bootstrap deploy compare run finish \
         setup doctor student-files data validate-data validate-solution \
         train training-status artifact atendimento campanha baseline drift \
-        alarm-status reaction ground-truth dashboard evidence check \
+        alarm-status reaction ground-truth dashboard evidence resumo check \
         verify-clean package validate-package \
         test fmt validate apply status destroy clean
 
@@ -114,6 +114,7 @@ run: ## ★ 4/5 · Roda inferência e operação com os patterns do student/solu
 	@$(MAKE) --no-print-directory reaction
 	@$(MAKE) --no-print-directory ground-truth
 	@$(MAKE) --no-print-directory evidence
+	@$(MAKE) --no-print-directory resumo
 
 finish: check destroy verify-clean ## ★ 5/5 · Desliga tudo, prova a limpeza e empacota a entrega (8-10 min)
 	@$(MAKE) --no-print-directory evidence
@@ -192,6 +193,9 @@ dashboard: ## Imprime o nome e o link direto do dashboard do CloudWatch
 
 evidence: ## Consolida o dossiê conferível em artifacts/evidence/
 	@$(PYTHON) $(SCRIPTS)/final.py evidence
+
+resumo: ## Grava a tabela de evidências em student/DECISION.md e repete no terminal
+	@$(PYTHON) $(SCRIPTS)/final.py resumo
 
 check: ## Confere que a evidência mínima existe antes de destruir a infraestrutura
 	@$(PYTHON) $(SCRIPTS)/final.py check
