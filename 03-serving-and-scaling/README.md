@@ -1045,8 +1045,7 @@ Este par de widgets é a razão de o assíncrono existir. No real-time a espera 
 
 Se o segundo widget ficou em zero o tempo todo, seu endpoint ainda estava com uma instância de pé quando você chamou — o que é igualmente correto e só significa que não houve espera por capacidade.
 
-> 📸 **Nota do autor (não é tarefa sua)** — capturar a linha 2 com a fila já drenada (itens de volta a zero). Mostra a diferença entre "esperar porque é lento" e "esperar porque está na fila".
-<!-- ![](img/painel-fila.png) -->
+![](img/painel-fila.png)
 
 ---
 
@@ -1121,8 +1120,7 @@ Por isso o widget usa uma expressão `SEARCH` pelo prefixo do laboratório em ve
 </blockquote>
 </details>
 
-> 📸 **Nota do autor (não é tarefa sua)** — capturar o widget do batch depois do job terminar, com a série já encerrada. É a prova visual de computação efêmera.
-<!-- ![](img/painel-batch.png) -->
+![](img/painel-batch.png)
 
 ---
 
