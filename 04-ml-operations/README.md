@@ -25,6 +25,10 @@ Duração: ~70 minutos. Continua a linhagem `churn-v1` do Lab 02.
 
 ### 04.2 — SLM no SageMaker
 
-Deploy de um *small language model* no SageMaker, aplicando as mesmas perguntas de
-operação a um tipo de modelo em que "resposta certa" é bem mais difícil de definir.
-Ainda não publicado.
+Deploy de um *small language model* quantizado, servido em CPU no SageMaker, aplicando as
+mesmas perguntas de operação a um tipo de modelo em que "resposta certa" é bem mais difícil
+de definir. Duas releases — V1 publicada à mão e V2 publicada por um pipeline de CI/CD com
+runner self-hosted, sem nenhuma credencial AWS guardada no GitHub — comparadas lado a lado
+num dashboard do CloudWatch, com avaliação generativa e a decisão sobre qual promover.
+
+Duração: ~100 minutos. Assume os labs 02, 03 e 04.1 concluídos.

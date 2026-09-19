@@ -13,6 +13,42 @@
 
 ---
 
+## Evidências da nossa execução
+
+<!-- A tabela abaixo é preenchida pelo `make resumo` com os números da SUA execução.
+     Não edite à mão: o bloco entre os marcadores é regravado a cada `make resumo`.
+     O que você escreve neste documento são as seções de evidência e recomendação,
+     abaixo — a tabela é só o dado bruto para você citar nelas. -->
+<!-- inicio-evidencias -->
+| Sinal | Etapa | O que medimos na sua execução |
+|---|---|---|
+| Janela saudável | make baseline | _rode `make baseline`_ |
+| Janela com drift | make drift | _rode `make drift`_ |
+| Alarme de drift | make alarm-status | _rode `make alarm-status`_ |
+| Reação automática | make reaction | _rode `make reaction`_ |
+| Qualidade com ground truth | make ground-truth | _rode `make ground-truth`_ |
+<!-- fim-evidencias -->
+
+<details>
+<summary><b>💡 O que significam os números da tabela</b></summary>
+
+| Termo | Em português claro |
+|---|---|
+| **PSI** (Population Stability Index) | Mede o quanto a distribuição de uma variável (ou das predições) mudou entre a referência e a janela observada. Não olha rótulo, só a forma do histograma. Abaixo de ~0,10 é ruído de amostragem; acima do limiar (0,20 neste lab) é mudança que merece atenção. |
+| **limiar** | O número que separa "ruído" de "alarme". Está escrito em `terraform/monitoring.tf`, não é uma sensação — é uma decisão de projeto. |
+| **baseline** | A janela "saudável" deste lab: dados recentes, ainda parecidos com o treino. É o "antes" contra o qual tudo é comparado. |
+| **drift** | Deslocamento de distribuição. Drift é sinal, não sentença: ele diz que o mundo mudou, não que o modelo errou. |
+| **alarme** | Regra do CloudWatch que compara o PSI publicado com o limiar. Vira `ALARM` quando cruza, e é essa transição que dispara o EventBridge e a Lambda. |
+| **ground truth** | O rótulo verdadeiro (o cliente cancelou ou não), que só chega dias depois da predição. Sem ele não existe F1 nem ROC-AUC — só PSI. |
+| **F1** | Média entre precisão e recall. Cai quando o modelo passa a errar mais, para qualquer lado (prevendo churn demais ou de menos). Não diz sozinho **qual** dos dois lados — para isso é preciso a matriz de confusão. |
+| **ROC-AUC** | O quão bem o modelo ordena clientes por risco, independente do ponto de corte escolhido. 0,50 é chute puro; 1,00 é ordenação perfeita. Cai menos que o F1 quando o modelo só muda de "opinião média", porque a ordenação relativa aguenta mais que a classificação binária. |
+
+Por que não existe p50/p95 nesta tabela: este lab não mede latência de chamada (isso já foi
+medido no Lab 03). Aqui a régua é distribuição de dados (PSI) e acerto de classificação (F1,
+ROC-AUC) — perguntas diferentes, que só o rótulo verdadeiro responde.
+
+</details>
+
 ## Estado observado
 
 *O que estava acontecendo quando você chegou? Em duas ou três frases, sem jargão — como

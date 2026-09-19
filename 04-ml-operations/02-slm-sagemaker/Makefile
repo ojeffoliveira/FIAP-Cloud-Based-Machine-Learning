@@ -7,10 +7,15 @@
 #   V2 (pipeline, runner efemero) -> runner-token -> runner-plan -> runner-apply ->
 #     (registro automatico no boot, decisao D44; runner-register-help mostra o
 #     fallback manual) -> (push dispara .github/workflows/04-2-deploy-v2.yml
-#     no runner self-hosted, sem chave AWS estatica no GitHub) -> compare
+#     no runner self-hosted, sem chave AWS estatica no GitHub) -> compare ->
+#     dashboard -> resumo
 # Fechamento: evidence -> destroy-models -> runner-destroy -> destroy-all ->
 # verify-clean. `make e2e` roda o que e 100% Codespaces (V1 + infra + qualidade
 # local); nunca inventa um PAT para automatizar o registro do runner.
+#
+# `dashboard` e `resumo` nunca mutam a AWS nem o Terraform: o primeiro so le
+# (GetDashboard); o segundo so le artifacts/evidence/*.json locais e regrava a
+# tabela do DECISION.md. Podem ser chamados a qualquer momento do lab.
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -38,7 +43,7 @@ export TF
 .PHONY: help setup doctor preflight backend model-v1 model-v2 \
         runner-plan runner-apply runner-token runner-status runner-register-help \
         plan-v1 deploy-v1 status-v1 smoke-v1 benchmark-v1 quality \
-        pipeline-preflight autoscaling-status compare evidence \
+        pipeline-preflight autoscaling-status compare dashboard resumo evidence \
         destroy-models runner-destroy destroy-all verify-clean e2e clean
 
 help: ## Lista os alvos disponiveis
@@ -55,6 +60,7 @@ help: ## Lista os alvos disponiveis
 	@echo "     make runner-register-help mostra o caminho automatico e o manual/fallback)"
 	@echo "  Fechamento: make evidence destroy-models runner-destroy destroy-all verify-clean"
 	@echo "  Ciclo local completo (so V1 + infra + qualidade, nunca V2): make e2e"
+	@echo "  Painel e DECISION.md (nunca tocam a AWS alem de GetDashboard): make dashboard resumo"
 
 setup: ## Cria/atualiza o .venv do lab com as dependencias fixadas
 	@bash $(SCRIPTS)/setup.sh
@@ -71,7 +77,8 @@ preflight: doctor ## Mede runtime real (DLC, contexto, latencia) contra o Academ
 	@$(PYTHON) $(SCRIPTS)/resolve_runtime.py
 
 backend: doctor ## Cria bucket de state (terraform_data+local-exec) e inicializa terraform/slm - dono: A6
-	@$(TF) -chdir=terraform/slm init -input=false
+	@$(PYTHON) $(SCRIPTS)/bootstrap_backend.py
+	@$(TF) -chdir=terraform/slm init -input=false -reconfigure -backend-config=../../.generated/backend.hcl
 
 model-v1: doctor ## Baixa/quantiza (Q4_0) e publica a release V1 no bucket de artifacts - dono: A7
 	@$(PYTHON) $(SCRIPTS)/model_sync.py --release v1
@@ -82,7 +89,12 @@ model-v2: doctor ## Baixa/quantiza (Q4_K_M) e publica a release V2 no bucket de 
 plan-v1: backend model-v1 ## Planeja o endpoint V1 em terraform/slm - dono: A6
 	@$(TF) -chdir=terraform/slm plan -input=false -var release=v1
 
-deploy-v1: backend model-v1 ## Aplica o endpoint V1 (fixed_capacity=1) + dashboard - dono: A6
+deploy-v1: backend ## Aplica o endpoint V1 (fixed_capacity=1) + dashboard - dono: A6
+	@echo "== estagio 1/2: bucket de artefatos (o upload do modelo precisa dele antes de existir) =="
+	@$(TF) -chdir=terraform/slm apply -input=false -auto-approve -target=terraform_data.artifacts_bucket -var release=v1
+	@echo "== publicando a release v1 no bucket =="
+	@$(MAKE) --no-print-directory model-v1
+	@echo "== estagio 2/2: model, endpoint e dashboard =="
 	@$(TF) -chdir=terraform/slm apply -input=false -auto-approve -var release=v1
 	@$(TF) -chdir=terraform/slm output
 
@@ -164,6 +176,12 @@ autoscaling-status: doctor ## Le o scalable target/policy do V2 e grava artifact
 
 compare: doctor ## Compara V1 x V2 (latencia, qualidade, custo) e recomenda a release - dono: A8
 	@$(PYTHON) $(SCRIPTS)/evaluate.py --compare
+
+dashboard: ## Imprime o link do painel do CloudWatch, confirmado por GetDashboard antes (nunca entrega link 404)
+	@$(PYTHON) $(SCRIPTS)/dashboard.py
+
+resumo: ## Regrava a tabela de evidencias do DECISION.md com os numeros medidos e imprime as mesmas frases - nunca toca a AWS
+	@$(PYTHON) $(SCRIPTS)/resumo.py >/dev/null
 
 # --------------------------------------------------------------------------- #
 # Evidencia, limpeza e verificacao - minha responsabilidade direta (A0)

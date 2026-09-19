@@ -76,11 +76,11 @@ Dentro de cada lab, `make help` lista todos os alvos disponíveis e a ordem em q
 | # | Laboratório | Descrição | Duração | Link |
 |---|-------------|-----------|---------|------|
 | 01 | **Setup e configuração do ambiente** | Fork do repositório, criação do Codespaces da disciplina, ativação da conta AWS Academy Learner Lab, criação do bucket base `base-config-<SEU_RM>` no S3 e configuração de credenciais. Setup único, feito uma vez. | ~30 min | [01-create-codespaces](01-create-codespaces/README.md) |
-| 01.1 | **Ritual de início de aula** | Referência curta reaberta antes de cada aula: sincronizar o fork para puxar novos labs e renovar as credenciais do Academy. | ~5 min | [Inicio-de-aula](01-create-codespaces/Inicio-de-aula.md) |
+| 01.1 | **Ritual de início de aula** | Referência curta reaberta antes de cada aula: sincronizar o fork para puxar novos labs e renovar as credenciais do Academy. | 3–5 min | [Inicio-de-aula](01-create-codespaces/Inicio-de-aula.md) |
 | 02 | **Do modelo ao sistema de Machine Learning** | Contrato de dados executável (incluindo quebrá-lo de propósito para ver o vazamento de rótulo), training job do XGBoost, artefato lido da API que o produziu e endpoint real-time servindo na sua conta. Avaliação contra 600 linhas que nunca entraram no treino: baseline majoritário, matriz de confusão, ROC-AUC, PR-AUC e calibração. | 75–90 min | [02-ml-system](02-ml-system/README.md) |
 | 03 | **Serving and Scaling** | Um único `model.tar.gz` sustentando quatro contratos de consumo — Real-Time, Serverless e Async Endpoints mais um Batch Transform Job — com Application Auto Scaling configurado e uma demonstração determinística de elasticidade 1→2→1 provada por API. Latência (p50/p95/p99) versus throughput. | 75–95 min | [03-serving-and-scaling](03-serving-and-scaling/README.md) |
 | 04.1 | **Observabilidade, drift e resposta operacional** | Prova na AWS real que um endpoint pode estar `InService`, responder HTTP 200 e ainda assim o modelo estar errado. Drift de dados e de predições com PSI, métricas customizadas no CloudWatch, dashboard em tempo quase real, alarme que vira incidente via EventBridge e Lambda, e a queda de F1/ROC-AUC medida quando o ground truth chega atrasado. Fecha com um `DECISION.md` escrito pelo aluno. | ~70 min | [04-ml-operations/01-observability-drift-response](04-ml-operations/01-observability-drift-response/README.md) |
-| 04.2 | **SLM no SageMaker** | Deploy de um *small language model* no SageMaker, aplicando as mesmas perguntas de operação a um tipo de modelo em que "resposta certa" é bem mais difícil de definir. **Ainda não publicado.** | — | — |
+| 04.2 | **Do score à ação: SLM, releases e CI/CD** | Deploy de um *small language model* (GGUF, quantizado, servido em CPU) no SageMaker para transformar o score de churn em uma ação de negócio redigida. Duas releases controladas do mesmo artefato — V1 manual e V2 publicada por um pipeline de CI/CD com runner self-hosted — sem nenhuma credencial AWS armazenada no GitHub, dashboard comparando as duas versões e `DECISION.md` sobre qual promover. | ~100 min | [04-ml-operations/02-slm-sagemaker](04-ml-operations/02-slm-sagemaker/README.md) |
 | 05 | **Trabalho Final** | Projeto end-to-end consolidando ingestão, treino, serving e operação, com entregáveis prontos para upload no portal FIAP. | ~90 min | [05-Trabalho-Final](05-Trabalho-Final/README.md) |
 
 ---
@@ -101,13 +101,14 @@ Dentro de cada lab, `make help` lista todos os alvos disponíveis e a ordem em q
 │   └── Makefile                             #   `make help` lista o ciclo de vida
 ├── 03-serving-and-scaling/                  # Lab 03 — quatro contratos de consumo + autoscaling
 ├── 04-ml-operations/                        # Aula 3 — operação, confiabilidade e MLOps
-│   └── 01-observability-drift-response/     #   Lab 04.1 — PSI, CloudWatch, EventBridge, Lambda
+│   ├── 01-observability-drift-response/     #   Lab 04.1 — PSI, CloudWatch, EventBridge, Lambda
+│   └── 02-slm-sagemaker/                    #   Lab 04.2 — SLM, releases controladas e CI/CD
 ├── 05-Trabalho-Final/                       # Trabalho final — do modelo à decisão operacional
 ├── .devcontainer/                           # Configuração do GitHub Codespaces
 └── fiap.png
 ```
 
-Os labs 02, 03 e 04.1 seguem a mesma anatomia: `config/` com os parâmetros, `scripts/lab.py` como única superfície de comandos, `src/` com o código testável, `terraform/` com a infraestrutura, `tests/` com os testes unitários e um `Makefile` que documenta o ciclo de vida completo.
+Os labs 02, 03 e 04.1 seguem a mesma anatomia: `config/` com os parâmetros, `scripts/lab.py` como única superfície de comandos, `src/` com o código testável, `terraform/` com a infraestrutura e um `Makefile` que documenta o ciclo de vida completo. O Lab 04.1 acrescenta `tests/` com os testes unitários (PSI, contrato de dados, handler da Lambda). O Lab 04.2 segue a mesma base, com pastas extras próprias de um SLM (`model/`, `prompts/`, `eval/`) e do runner de CI/CD (`.github/workflows/`).
 
 ---
 
@@ -126,6 +127,9 @@ Os labs 02, 03 e 04.1 seguem a mesma anatomia: `config/` com os parâmetros, `sc
 04.1 Observabilidade, drift e resposta operacional
    │
    ▼
+04.2 SLM, releases e CI/CD
+   │
+   ▼
 05 Trabalho Final
 ```
 
@@ -134,6 +138,7 @@ Cada laboratório assume que os anteriores foram concluídos. Em especial:
 - Todos os labs dependem do **Lab 01**: o mesmo Codespaces, a mesma conta AWS e o bucket `base-config-<SEU_RM>`.
 - O **Lab 03** usa o Lab 02 como referência conceitual (o mesmo padrão de dois estágios, o mesmo jeito de ler o artefato pela API), mas **não depende de nenhum arquivo runtime dele**: gera o próprio treino do zero.
 - O **Lab 04.1** continua a linhagem `churn-v1` do Lab 02 e assume os labs 02 e 03 concluídos, porque a história dele começa depois do go-live.
+- O **Lab 04.2** assume os labs 02, 03 e 04.1 concluídos: reaproveita o endpoint de churn como origem do score que o SLM transforma em ação.
 
 ---
 
@@ -144,6 +149,7 @@ Cada laboratório assume que os anteriores foram concluídos. Em especial:
 - **Credenciais expiradas?** Cada sessão do AWS Academy dura 4 horas. Basta iniciar uma nova sessão e recopiar as credenciais para `~/.aws/credentials`. O sintoma típico é `ExpiredToken` no meio de um comando que funcionava.
 - **Endpoint consumindo crédito?** É o risco real da disciplina, e ele não aparece na sua tela. Ao final de cada aula, rode `make destroy` e depois `make verify-clean` dentro da pasta do lab. O `verify-clean` consulta a API recurso por recurso, porque o state do Terraform não é autoridade suficiente para afirmar que a conta está limpa.
 - **Terraform reclamando de versão?** Os labs fixam `required_version = "= 1.15.8"` de propósito: sem isso, uma turma com versões diferentes depura Terraform em vez de arquitetura de ML. No Codespaces da disciplina a versão já vem correta.
+- **Painel e resumo prontos.** Nos labs 03, 04.1 e 04.2, `make dashboard` imprime o link do painel do CloudWatch já provisionado por Terraform, e `make resumo` preenche a tabela de evidências medidas dentro do `DECISION.md` — resta só escrever a decisão.
 
 ---
 

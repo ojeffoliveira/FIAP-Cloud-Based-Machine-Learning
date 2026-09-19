@@ -5,7 +5,7 @@ Um comando por etapa do ciclo de vida, na ordem em que o README os apresenta:
 
     doctor -> data -> validate-data -> wait-training -> status -> dashboard
            -> baseline -> drift -> alarm-status -> reaction -> ground-truth
-           -> evidence -> verify-clean
+           -> evidence -> resumo -> verify-clean
 
 Disciplina de saída, uniforme em todos eles: **stdout é resultado** (JSON que
 alguém vai capturar ou pipar), **stderr é progresso**. Quem rodar
@@ -1041,6 +1041,198 @@ def cmd_evidence(_: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# resumo
+# --------------------------------------------------------------------------- #
+
+INICIO_EVIDENCIAS = "<!-- inicio-evidencias -->"
+FIM_EVIDENCIAS = "<!-- fim-evidencias -->"
+
+
+def _num(valor: float | None, digits: int = 2) -> str:
+    """Número em português de gente: vírgula decimal, sem casas falsas.
+
+    O PSI e o F1 chegam com seis casas decimais no JSON (precisão do cálculo, não
+    da leitura). Duas casas bastam para qualquer decisão deste lab, e a vírgula é
+    o separador decimal em português — ponto aqui pareceria milhar.
+    """
+    if valor is None:
+        return "não medido"
+    return f"{valor:.{digits}f}".replace(".", ",")
+
+
+def _pct(fracao: float | None) -> str:
+    """Fração para porcentagem redonda: 0.895 -> 90%. Decimal de fração não ajuda decisão."""
+    if fracao is None:
+        return "não medido"
+    return f"{round(fracao * 100)}%"
+
+
+def _frases_evidencia(
+    baseline: dict | None,
+    drift_: dict | None,
+    alarme: dict | None,
+    reacao: dict | None,
+    qualidade: dict | None,
+) -> dict[str, str]:
+    """Uma frase por linha da tabela, escrita para quem não abre JSON."""
+    frases: dict[str, str] = {}
+
+    if baseline:
+        frases["baseline"] = (
+            f"Na janela saudável, o PSI máximo ficou em **{_num(baseline.get('psi_max'))}** "
+            f"(limiar {_num(baseline.get('limiar'))}), e o alarme continuou "
+            f"**{baseline.get('alarme_apos_baseline', '?')}** — a régua não disparou sem motivo."
+        )
+
+    if drift_:
+        n_acima = len(drift_.get("features_acima_do_limiar") or [])
+        frases["drift"] = (
+            f"Na janela com drift, o PSI máximo subiu para **{_num(drift_.get('psi_max'))}**, "
+            f"puxado por **`{drift_.get('feature_com_maior_psi', '?')}`**; "
+            f"**{n_acima} de 7 variáveis** passaram do limiar de {_num(drift_.get('limiar'))}. "
+            f"O PSI das predições foi **{_num(drift_.get('prediction_psi'))}**, com "
+            f"**{_pct(drift_.get('predicted_churn_rate'))}** dos clientes previstos como churn."
+        )
+
+    if alarme:
+        frases["alarme"] = (
+            f"O alarme foi para **{alarme.get('estado', '?')}**. Motivo registrado pelo "
+            f"CloudWatch: \"{evidence._resumir(alarme.get('motivo', ''))}\". "
+            f"({len(alarme.get('historico') or [])} transição(ões) recente(s) no histórico.)"
+        )
+
+    if reacao:
+        incidente = reacao.get("incidente") or {}
+        frases["reacao"] = (
+            f"A Lambda rodou **{reacao.get('invocacoes_no_log', '?')}** vez(es) e escreveu o "
+            f"incidente em `{reacao.get('objeto_s3', '?')}`, registrando "
+            f"**{incidente.get('status', '?')} / {incidente.get('recommended_action', '?')}**. "
+            f"Nenhum treinamento novo foi disparado "
+            f"(**{reacao.get('training_jobs_criados_depois', '?')}** job(s)) — a reação não "
+            "retreina sozinha."
+        )
+
+    if qualidade:
+        comparacao = qualidade.get("comparacao") or {}
+        frases["qualidade"] = (
+            f"Com o rótulo verdadeiro, o F1 caiu de **{_num(comparacao.get('f1_referencia'))}** "
+            f"para **{_num(comparacao.get('f1_observado'))}** "
+            f"(queda de {_num(comparacao.get('queda_f1'))}), e o ROC-AUC caiu "
+            f"**{_num(comparacao.get('queda_roc_auc'))}**. Modo de falha na janela com drift: "
+            f"{comparacao.get('modo_de_falha', '?')}"
+        )
+
+    return frases
+
+
+def _grava_evidencias_no_decision(
+    baseline: dict | None,
+    drift_: dict | None,
+    alarme: dict | None,
+    reacao: dict | None,
+    qualidade: dict | None,
+) -> int:
+    """Reescreve a tabela de evidências do DECISION.md com os números medidos.
+
+    Só o bloco entre os marcadores é trocado: o que o aluno escreveu nas seções de
+    evidência e recomendação fica intacto, e rodar de novo não duplica nada. Se o
+    arquivo não tiver os marcadores (aluno apagou sem querer), avisa e não mexe —
+    perder o texto que ele escreveu seria muito pior que deixar a tabela desatualizada.
+    """
+    caminho = config.LAB_ROOT / "DECISION.md"
+    if not caminho.exists():
+        log("aviso: DECISION.md não encontrado; a tabela não foi atualizada")
+        return 0
+
+    texto = caminho.read_text(encoding="utf-8")
+    if INICIO_EVIDENCIAS not in texto or FIM_EVIDENCIAS not in texto:
+        log("aviso: os marcadores de evidência não estão no DECISION.md; a tabela não foi atualizada")
+        return 0
+
+    frases = _frases_evidencia(baseline, drift_, alarme, reacao, qualidade)
+    pendente = {
+        "baseline": "_rode `make baseline`_",
+        "drift": "_rode `make drift`_",
+        "alarme": "_rode `make alarm-status`_",
+        "reacao": "_rode `make reaction`_",
+        "qualidade": "_rode `make ground-truth`_",
+    }
+    rotulos = [
+        ("baseline", "Janela saudável", "make baseline"),
+        ("drift", "Janela com drift", "make drift"),
+        ("alarme", "Alarme de drift", "make alarm-status"),
+        ("reacao", "Reação automática", "make reaction"),
+        ("qualidade", "Qualidade com ground truth", "make ground-truth"),
+    ]
+
+    bloco = [
+        INICIO_EVIDENCIAS,
+        "| Sinal | Etapa | O que medimos na sua execução |",
+        "|---|---|---|",
+        *[f"| {nome} | {etapa} | {frases.get(chave, pendente[chave])} |" for chave, nome, etapa in rotulos],
+        FIM_EVIDENCIAS,
+    ]
+
+    caminho.write_text(
+        texto[: texto.index(INICIO_EVIDENCIAS)]
+        + "\n".join(bloco)
+        + texto[texto.index(FIM_EVIDENCIAS) + len(FIM_EVIDENCIAS) :],
+        encoding="utf-8",
+    )
+    return sum(1 for chave, _, _ in rotulos if chave in frases)
+
+
+def cmd_resumo(_: argparse.Namespace) -> int:
+    """Escreve a tabela de evidências no DECISION.md e repete no terminal.
+
+    As mesmas frases vão para os dois lugares, de propósito: se o terminal dissesse
+    uma coisa e o documento outra, o aluno não saberia em qual confiar.
+    """
+    baseline = evidence.read("baseline-drift.json")
+    drift_ = evidence.read("production-drift.json")
+    alarme = evidence.read("alarm.json")
+    reacao = evidence.read("reaction.json")
+    qualidade = evidence.read("quality.json")
+
+    frases = _frases_evidencia(baseline, drift_, alarme, reacao, qualidade)
+    secoes = [
+        ("baseline", "JANELA SAUDÁVEL — baseline", "make baseline"),
+        ("drift", "JANELA COM DRIFT", "make drift"),
+        ("alarme", "ALARME DE DRIFT", "make alarm-status"),
+        ("reacao", "REAÇÃO AUTOMÁTICA", "make reaction"),
+        ("qualidade", "QUALIDADE COM GROUND TRUTH", "make ground-truth"),
+    ]
+
+    falta: list[str] = []
+    for chave, titulo, comando in secoes:
+        log(titulo)
+        if chave in frases:
+            # O negrito do markdown não ajuda no terminal; sai só no documento.
+            log("  " + frases[chave].replace("**", ""))
+        else:
+            log(f"  ainda não medido — rode `{comando}`")
+            falta.append(comando)
+        log("")
+
+    escritas = _grava_evidencias_no_decision(baseline, drift_, alarme, reacao, qualidade)
+    log(f"DECISION.md: tabela de evidências atualizada ({escritas} de 5 linhas com dado medido).")
+    if falta:
+        log("Ainda não medido: " + ", ".join(sorted(set(falta))))
+    log("O que resta no arquivo é só a sua decisão — a tabela é regravada a cada `make resumo`.")
+
+    emit(
+        {
+            "baseline": baseline,
+            "drift": drift_,
+            "alarme": alarme,
+            "reacao": reacao,
+            "qualidade": qualidade,
+        }
+    )
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # verify-clean
 # --------------------------------------------------------------------------- #
 
@@ -1201,6 +1393,7 @@ COMANDOS: dict[str, tuple[Callable[[argparse.Namespace], int], str]] = {
     "reaction": (cmd_reaction, "Espera o incidente da Lambda e valida o conteúdo"),
     "ground-truth": (cmd_ground_truth, "Avalia a qualidade com o rótulo atrasado"),
     "evidence": (cmd_evidence, "Consolida o dossiê de evidência"),
+    "resumo": (cmd_resumo, "Escreve a tabela de evidências no DECISION.md"),
     "verify-clean": (cmd_verify_clean, "Prova por API que nada cobrado sobrou"),
 }
 

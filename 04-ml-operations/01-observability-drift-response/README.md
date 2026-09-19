@@ -1,13 +1,16 @@
 <!--
 CONVENÇÃO DE PRINTS DESTE README (nota para o professor, não aparece renderizada)
 
-Cada bloco "> 📸 Print NN" abaixo marca o lugar exato onde a imagem entra, com o que
-capturar e o que aquela imagem prova. Depois de salvar o arquivo em `img/`, troque o
-bloco pela linha de imagem que está comentada logo abaixo dele.
+Print não é tarefa do aluno: é imagem que o PROFESSOR captura ao validar o laboratório e
+embute no README, para o aluno comparar a tela dele com a esperada. Cada bloco
+"> 📸 Nota do autor" abaixo marca o lugar exato onde a imagem entra, nomeando o PAINEL
+exato (nome do dashboard) e os QUADROS exatos (título de cada widget, entre aspas) a
+enquadrar — "capture o dashboard" não basta. Depois de salvar o arquivo em `img/`, troque
+o bloco pela linha de imagem que está comentada logo abaixo dele.
 
-Este laboratório usa apenas DOIS prints obrigatórios, e os dois são do dashboard:
-tudo o mais que o lab afirma já é provado por texto (Saída esperada) ou pelo dossiê
-de evidência em artifacts/evidence/. O dashboard é a única evidência que só faz
+Este laboratório usa apenas DOIS prints obrigatórios, e os dois são do mesmo painel do
+CloudWatch: tudo o mais que o lab afirma já é provado por texto (Saída esperada) ou pelo
+dossiê de evidência em artifacts/evidence/. O dashboard é a única evidência que só faz
 sentido vista.
 -->
 
@@ -237,7 +240,7 @@ pelo cliente.
 
 ### Resultado esperado desta parte
 
-O laboratório responde no seu Codespaces, você conhece os 22 comandos disponíveis e o
+O laboratório responde no seu Codespaces, você conhece os 23 comandos disponíveis e o
 `doctor` confirma credencial, região, role e alcance dos seis serviços que o lab usa.
 
 <a id="passo-1"></a>
@@ -323,6 +326,7 @@ make help
 >   reaction       Espera o incidente que a Lambda escreve no S3 e valida o conteúdo
 >   ground-truth   Avalia a qualidade com o rótulo que chegou depois e publica F1/ROC-AUC
 >   evidence       Consolida o dossiê conferível em artifacts/evidence/
+>   resumo         Preenche a tabela de evidências do DECISION.md e imprime os números medidos
 >   destroy        Destrói todos os recursos gerenciados
 >   verify-clean   Prova por consulta direta à API que não sobrou nada cobrando
 >   e2e            Ciclo completo com limpeza à prova de falha (KEEP_RESOURCES=1 pula o destroy)
@@ -356,6 +360,7 @@ make help
 | `reaction` | Espera objeto em `s3://.../incidents/`, valida o conteúdo, conta invocações no log | Prova que a reação aconteceu **e** que ela não retreinou |
 | `ground-truth` | Junta predições salvas com os rótulos que chegaram depois; publica F1/ROC-AUC | A única etapa que mede acerto |
 | `evidence` | Consulta o estado real e escreve `artifacts/evidence/` | Fecha o lab com afirmações rastreáveis |
+| `resumo` | `lab.py resumo` | Lê os JSON de `artifacts/evidence/`, imprime os números e regrava a tabela de evidências dentro do `DECISION.md` |
 | `destroy` | `terraform destroy -auto-approve` | Obrigatório: o endpoint cobra por hora |
 | `verify-clean` | 10 consultas de API por prefixo | O state do Terraform não é autoridade suficiente |
 | `e2e` | Tudo acima em ordem, com `trap` de limpeza no `EXIT` | Usado na validação do lab; em aula seguimos passo a passo |
@@ -913,7 +918,7 @@ entrada se parece com o treino. Ele **não** prova que as predições estão cer
 nesta tela olhou um rótulo verdadeiro. A faixa 4 está vazia por honestidade, não por
 falta de implementação.
 
-> 📸 Print 01 — capture o dashboard inteiro com a linha de base saudável: PSI abaixo do limiar, alarme em `OK`, faixa 4 vazia. É o "antes" da comparação que o passo 16 vai fechar.
+> 📸 **Nota do autor (não é tarefa sua)** — no painel **fiap-mlops-&lt;sufixo&gt;** (nome completo na saída de `make dashboard`, passo 9), capturar o painel inteiro enquadrando pelo menos os quadros **"Os dados ainda parecem os mesmos? (PSI máximo)"**, **"A regra virou incidente? (estado do alarme)"** e **"A qualidade aguentou? (F1, quando o ground truth chega)"**. Mostra o PSI abaixo do limiar, o alarme em `OK` e a faixa de qualidade ainda vazia — é o "antes" da comparação que o passo 16 vai fechar.
 <!-- ![](img/01-dashboard-baseline.png) -->
 
 ### Checkpoint
@@ -1117,7 +1122,7 @@ escolheu, com um limiar que alguém definiu, e que está escrito em
 `terraform/monitoring.tf`. Toda detecção de drift em produção é uma decisão de projeto
 disfarçada de fato técnico.
 
-> 📸 Print 02 — capture o dashboard com o alarme em `ALARM` e o PSI acima do limiar, mostrando a faixa 1 ainda verde ao lado. Esta é a imagem que resume o laboratório: infraestrutura saudável, sistema de ML degradado.
+> 📸 **Nota do autor (não é tarefa sua)** — no painel **fiap-mlops-&lt;sufixo&gt;** (o mesmo do passo 9), capturar os quadros **"O endpoint está atendendo? (chamadas)"**, **"Os dados ainda parecem os mesmos? (PSI máximo)"** e **"A regra virou incidente? (estado do alarme)"**. Mostra a infraestrutura ainda saudável ao lado do alarme em `ALARM` e do PSI acima do limiar — a imagem que resume o laboratório: infraestrutura saudável, sistema de ML degradado.
 <!-- ![](img/02-dashboard-alarme.png) -->
 
 ---
@@ -1384,8 +1389,20 @@ prova, inclusive que ninguém demonstrou aqui que retreinar resolveria.
 
 **22. Escreva a sua decisão**
 
-Abra o `DECISION.md` deste laboratório e preencha as dez seções. Ele está em branco de
-propósito: as perguntas-guia estão lá, as respostas são suas.
+```bash
+make resumo
+code DECISION.md
+```
+
+O `make resumo` faz duas coisas: imprime no terminal os números medidos nesta sua
+execução e **escreve a tabela de evidências direto no `DECISION.md`**, entre os
+marcadores `<!-- inicio-evidencias -->` e `<!-- fim-evidencias -->`. Você abre o
+documento já com os cinco sinais preenchidos — PSI da janela saudável, PSI da janela com
+drift, estado do alarme, o que a reação fez, e a queda de F1/ROC-AUC — e o que resta
+escrever é só a decisão, nas dez seções abaixo da tabela.
+
+Preencha as dez seções. O documento está em branco de propósito: as perguntas-guia estão
+lá, as respostas são suas.
 
 Escreva como se a Helena fosse ler — porque, na prática, é ela quem lê. O exercício não é
 descrever o que aconteceu; é defender uma recomendação com a evidência que você tem, e

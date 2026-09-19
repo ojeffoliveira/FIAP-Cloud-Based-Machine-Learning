@@ -292,6 +292,27 @@ def terraform_outputs(chdir: Path) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
+# CloudWatch
+# --------------------------------------------------------------------------- #
+
+
+def get_dashboard(name: str) -> dict[str, Any]:
+    """GetDashboard de verdade — nunca imprimir um link sem confirmar que o corpo existe.
+
+    Um `dashboard_url` construído só a partir do nome abre 404 se o `apply` ainda
+    não rodou ou se o painel foi apagado por fora do Terraform; esta chamada é o
+    que evita entregar esse link quebrado ao aluno (spec-visual §2).
+    """
+    try:
+        return client("cloudwatch").get_dashboard(DashboardName=name)
+    except ClientError as exc:
+        raise LabError(
+            f"o painel {name!r} não existe no CloudWatch. Rode `make deploy-v1` "
+            "primeiro — o dashboard sobe junto com o endpoint V1."
+        ) from exc
+
+
+# --------------------------------------------------------------------------- #
 # Endpoint em tempo real
 # --------------------------------------------------------------------------- #
 

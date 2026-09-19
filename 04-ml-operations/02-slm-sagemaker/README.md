@@ -1,3 +1,14 @@
+<!--
+CONVENÇÃO DE PRINTS DESTE README (nota para o professor, não aparece renderizada)
+
+Print não é tarefa do aluno: é imagem que o PROFESSOR captura ao validar o laboratório e
+embute no README, para o aluno comparar a tela dele com a esperada. Cada bloco
+"> 📸 Nota do autor" abaixo marca o lugar exato onde a imagem entra, nomeando o PAINEL
+exato (nome do dashboard) e os QUADROS exatos (título de cada widget, entre aspas) a
+enquadrar — "capture o dashboard" não basta. Depois de salvar o arquivo em `img/`, troque
+o bloco pela linha de imagem que está comentada logo abaixo dele.
+-->
+
 # 04.2 - Do score à ação: SLM, releases e CI/CD sem chaves AWS
 
 > Antes de começar, confira que suas credenciais AWS Academy estão ativas e que o Codespaces deste repositório está aberto. Veja [Preparando Credenciais](../../01-create-codespaces/README.md) se ainda não configurou.
@@ -190,6 +201,8 @@ make help
 | `pipeline-preflight` | Prova, dentro do workflow, que a credencial é instance profile via IMDS | Gate de segurança que roda dentro do próprio job AWS |
 | `autoscaling-status` | Lê o scalable target/policy do V2 | Evidência de que o autoscaling existe e está configurado |
 | `compare` | Compara V1 x V2 (latência, qualidade, custo) e recomenda a release | Vira `releases/recommended.json` e alimenta o `DECISION.md` |
+| `dashboard` | Confirma com `GetDashboard` que o painel existe e imprime o link direto | Nunca entrega um link que abre em 404 |
+| `resumo` | Regrava a tabela de evidências do `DECISION.md` com os números medidos | Você nunca transcreve número de JSON à mão |
 | `evidence` | Consolida o dossiê em `artifacts/evidence/` | Cada afirmação do dossiê aponta para um arquivo/campo verificável |
 | `destroy-models` | Destrói endpoints/configs/models de V1 e V2 | Primeiro passo do cleanup — recursos que cobram por hora |
 | `runner-destroy` | Destrói a EC2 do runner | Segundo passo do cleanup, sempre a partir do Codespaces |
@@ -676,9 +689,27 @@ Compara latência, qualidade e custo entre as duas releases e grava a recomenda�
 <a id="passo-30"></a>
 **30. Abra o dashboard do CloudWatch**
 
-Abra o link de `fiap-mlops-slm-<suffix>` no AWS Console (o output do `terraform -chdir=terraform/slm output` imprime a URL).
+```bash
+make dashboard
+```
 
-> 📸 Print 4 — dashboard com V1 e V2 lado a lado (invocações, latência, 4XX/5XX, autoscaling, texto de release recomendada).
+> Saída esperada:
+> ```text
+>   Painel do lab : fiap-mlops-slm-xxxxxxxx (7 widgets, janela de 3 horas)
+>
+>   Deixe o painel aberto do começo ao fim da Parte 8. Ele nasce com a forma
+>   final — linhas de V1 e V2 lado a lado — desde o `deploy-v1`; os quadros
+>   de V2 ficam vazios até o endpoint V2 existir e receber tráfego. Isso é o
+>   comportamento esperado, não erro: se um quadro estiver vazio depois de
+>   gerar tráfego, recarregue a aba depois de um ou dois minutos — a métrica
+>   do SageMaker é publicada com atraso.
+>
+> https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/fiap-mlops-slm-xxxxxxxx
+> ```
+
+Abra o link em uma aba separada. O comando confirma com `GetDashboard` que o painel existe antes de imprimir o link — nunca entrega uma URL que abre em 404.
+
+> 📸 **Nota do autor (não é tarefa sua)** — no painel **fiap-mlops-slm-&lt;sufixo&gt;** (nome completo na saída de `make dashboard`), capturar os quadros **"V1 e V2 estão recebendo chamadas?"**, **"Quem responde mais rápido — V1 ou V2? (latência do modelo, ms)"** e **"V1 ou V2 deu erro? (4XX + 5XX)"**. Mostra as duas releases recebendo tráfego, qual das duas responde mais rápido e que nenhuma das duas está errando.
 <!-- ![](img/05-dashboard-v1-v2.png) -->
 
 <details>
@@ -699,7 +730,12 @@ Consolida os arquivos de `artifacts/evidence/` num `evidence.md` — cada afirma
 <a id="passo-32"></a>
 **32. Escreva o `DECISION.md`**
 
-Preencha o `DECISION.md` deste lab (ver seções no arquivo), endereçado à Helena: qual release recomendar, com qual evidência, e sob qual condição reverter.
+```bash
+make resumo
+code DECISION.md
+```
+
+O `make resumo` faz duas coisas: imprime no terminal os números medidos nesta sua execução e **escreve a tabela de evidências direto no `DECISION.md`**, entre os marcadores `<!-- inicio-evidencias -->` e `<!-- fim-evidencias -->`. Você abre o documento já com as linhas medidas preenchidas — fumaça, qualidade generativa, latência/tokens por segundo, credencial do deploy V2 — e o que resta escrever é só a decisão, nas seções abaixo da tabela: qual release recomendar, com qual evidência, e sob qual condição reverter, endereçado à Helena.
 
 ### Checkpoint da Parte 8
 - `evidence.md` existe e cada afirmação aponta para um arquivo/campo verificável.

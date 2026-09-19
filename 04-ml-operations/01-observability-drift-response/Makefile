@@ -3,8 +3,8 @@
 # Um endpoint verde não prova um modelo correto. Ordem do ciclo de vida:
 # setup -> doctor -> data -> validate-data -> apply -> dashboard -> status ->
 # baseline -> drift -> alarm-status -> reaction -> ground-truth -> evidence ->
-# destroy -> verify-clean. `make e2e` roda exatamente isso com uma armadilha de
-# limpeza.
+# resumo -> destroy -> verify-clean. `make e2e` roda exatamente isso com uma
+# armadilha de limpeza.
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -26,7 +26,7 @@ export TF
 HANDOFF := $(TF_DIR)/artifact.auto.tfvars.json
 
 .PHONY: help setup doctor data validate-data test fmt validate plan apply status \
-        dashboard baseline drift alarm-status reaction ground-truth evidence \
+        dashboard baseline drift alarm-status reaction ground-truth evidence resumo \
         destroy verify-clean e2e clean
 
 help: ## Lista os alvos disponíveis
@@ -98,6 +98,9 @@ ground-truth: ## Avalia a qualidade com o rótulo que chegou depois e publica F1
 
 evidence: ## Consolida o dossiê conferível em artifacts/evidence/
 	@$(PYTHON) $(SCRIPTS)/lab.py evidence > /dev/null
+
+resumo: ## Preenche a tabela de evidências do DECISION.md e imprime os números medidos
+	@$(PYTHON) $(SCRIPTS)/lab.py resumo > /dev/null
 
 destroy: ## Destrói todos os recursos gerenciados
 	@$(TF) -chdir=$(TF_DIR) destroy -input=false -auto-approve
