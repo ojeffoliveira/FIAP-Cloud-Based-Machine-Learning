@@ -1384,10 +1384,11 @@ Nenhuma linha do dossiê é print de tela.
 
 ```bash
 cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling
+make resumo
 code DECISION.md
 ```
 
-Rode `make resumo` uma última vez para a tabela de evidências ficar com todas as seis linhas medidas, e então termine as quatro seções de recomendação (uma por workload), a seção "Custo do erro" e "Condições que fariam a decisão mudar".
+Esta é a última passada do `make resumo`: agora as seis linhas da tabela de evidências têm dado medido, incluindo carga e elasticidade, que só existiram depois da Parte 6. Termine as quatro seções de recomendação (uma por workload), a seção "Custo do erro" e "Condições que fariam a decisão mudar".
 
 A essa altura o documento não tem mais nenhum dado para você transcrever: a tabela veio preenchida, e o que falta é exclusivamente o seu julgamento.
 
