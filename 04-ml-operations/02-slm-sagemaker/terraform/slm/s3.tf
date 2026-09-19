@@ -41,10 +41,35 @@ resource "terraform_data" "artifacts_bucket" {
   provisioner "local-exec" {
     when        = destroy
     interpreter = ["/bin/bash", "-c"]
-    command     = <<-EOT
+    # `rb --force` NÃO basta aqui, e isso derrubou um `terraform destroy` real:
+    # "The bucket you tried to delete is not empty. You must delete all versions
+    # in the bucket." O bucket tem versionamento habilitado (veja
+    # aws_s3_bucket_versioning.artifacts abaixo), e `rb --force` só apaga a versão
+    # corrente de cada chave — versões antigas e delete markers ficam, então o
+    # DeleteBucket continua vendo bucket não vazio.
+    #
+    # O efeito para o aluno era o pior possível: o destroy abortava no bucket e
+    # deixava o endpoint ml.m5.xlarge no ar, cobrando por hora, com a impressão de
+    # que a limpeza tinha rodado.
+    #
+    # Por isso purgamos versões e delete markers em lotes de até 1000 (limite do
+    # próprio DeleteObjects) antes do `rb`, repetindo até esvaziar. Nenhuma release
+    # deste lab acumula tantas versões, mas o laço paginado é o que garante que um
+    # destroy sozinho baste.
+    command = <<-EOT
       set -euo pipefail
       if aws s3api head-bucket --bucket ${self.input} 2>/dev/null; then
-        aws s3 rb s3://${self.input} --force
+        while true; do
+          lote="$(aws s3api list-object-versions --bucket ${self.input} --max-items 1000 \
+            --output json --query '{Objects: [Versions[], DeleteMarkers[]][] | [].{Key: Key, VersionId: VersionId}}')"
+          if [ "$(printf '%s' "$lote" | python3 -c 'import json,sys; print(len((json.load(sys.stdin) or {}).get("Objects") or []))')" = "0" ]; then
+            break
+          fi
+          printf '%s' "$lote" > /tmp/purge-${self.input}.json
+          aws s3api delete-objects --bucket ${self.input} --delete "file:///tmp/purge-${self.input}.json" > /dev/null
+        done
+        rm -f /tmp/purge-${self.input}.json
+        aws s3api delete-bucket --bucket ${self.input}
       fi
     EOT
   }
