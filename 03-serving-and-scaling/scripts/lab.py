@@ -257,6 +257,87 @@ def _le_evidencia(nome: str) -> dict | None:
         return json.load(handle)
 
 
+INICIO_EVIDENCIAS = "<!-- inicio-evidencias -->"
+FIM_EVIDENCIAS = "<!-- fim-evidencias -->"
+
+
+def _grava_evidencias_no_decision(compare, async_r, batch, load, scale) -> int:
+    """Reescreve a tabela de evidências do DECISION.md com os números medidos.
+
+    Só o bloco entre os marcadores é trocado: o que o aluno escreveu nas seções de
+    recomendação fica intacto, e rodar de novo não duplica nada. Se o arquivo não
+    tiver os marcadores (aluno apagou sem querer), avisa e não mexe — perder o
+    texto que ele escreveu seria muito pior que deixar a tabela desatualizada.
+    """
+    caminho = TERRAFORM_DIR.parent / "DECISION.md"
+    if not caminho.exists():
+        log("aviso: DECISION.md não encontrado; a tabela não foi atualizada")
+        return 0
+
+    texto = caminho.read_text(encoding="utf-8")
+    if INICIO_EVIDENCIAS not in texto or FIM_EVIDENCIAS not in texto:
+        log("aviso: os marcadores de evidência não estão no DECISION.md; a tabela não foi atualizada")
+        return 0
+
+    def rt(chave: str) -> str:
+        if not compare:
+            return "_rode `make compare`_"
+        x = compare.get(chave, {})
+        return (
+            f"p50 {x.get('warm_p50_ms')} ms · p95 {x.get('warm_p95_ms')} ms · "
+            f"primeira chamada {x.get('first_ms')} ms"
+        )
+
+    if async_r:
+        ev_async = (
+            f"{async_r.get('input_count')} linhas entraram e {async_r.get('output_count')} predições voltaram · "
+            f"capacidade {async_r.get('capacity_before')} → {async_r.get('capacity_after_observation')}"
+        )
+    else:
+        ev_async = "_rode `make async`_"
+
+    if batch:
+        ev_batch = f"{batch.get('output_count')} predições · job {batch.get('status')} e encerrado, sem endpoint"
+    else:
+        ev_batch = "_rode `make batch`_"
+
+    if load and load.get("levels"):
+        ev_load = " · ".join(
+            f"conc. {n['concurrency']}: p50 {n['p50_ms']} ms, {n['requests_per_second']} req/s"
+            for n in load["levels"]
+        )
+    else:
+        ev_load = "_rode `make load`_"
+
+    if scale:
+        ev_scale = f"{scale.get('before')} → {scale.get('scaled')} → {scale.get('restored')} instâncias"
+    else:
+        ev_scale = "_rode `make scale-demo`_"
+
+    linhas_tabela = [
+        ("Atendimento humano", "Real-Time", rt("realtime")),
+        ("App após fechamento da fatura", "Serverless", rt("serverless")),
+        ("Importação de arquivo pesado", "Asynchronous", ev_async),
+        ("Campanha noturna", "Batch Transform", ev_batch),
+        ("Concorrência no atendimento", "Real-Time sob carga", ev_load),
+        ("Elasticidade do atendimento", "Application Auto Scaling", ev_scale),
+    ]
+
+    bloco = [
+        INICIO_EVIDENCIAS,
+        "| Workload | Padrão | Evidência medida na sua execução |",
+        "|---|---|---|",
+        *[f"| {w} | {pad} | {ev} |" for w, pad, ev in linhas_tabela],
+        FIM_EVIDENCIAS,
+    ]
+
+    inicio = texto.index(INICIO_EVIDENCIAS)
+    fim = texto.index(FIM_EVIDENCIAS) + len(FIM_EVIDENCIAS)
+    caminho.write_text(texto[:inicio] + "\n".join(bloco) + texto[fim:], encoding="utf-8")
+
+    return sum(1 for _, _, ev in linhas_tabela if not ev.startswith("_rode"))
+
+
 def cmd_resumo(_args: argparse.Namespace) -> int:
     """Imprime os números medidos até agora, na ordem das linhas do DECISION.md.
 
@@ -327,6 +408,11 @@ def cmd_resumo(_args: argparse.Namespace) -> int:
     if falta:
         log("")
         log("Ainda não medido: " + ", ".join(sorted(set(falta))))
+
+    escritas = _grava_evidencias_no_decision(compare, async_r, batch, load, scale)
+    log("")
+    log(f"DECISION.md: tabela de evidências atualizada ({escritas} de 6 linhas com dado medido).")
+    log("O que resta no arquivo é só a sua decisão — a tabela é regravada a cada `make resumo`.")
 
     # stdout carrega o dado bruto, para quem quiser pipar; a leitura humana vai
     # toda para stderr acima.

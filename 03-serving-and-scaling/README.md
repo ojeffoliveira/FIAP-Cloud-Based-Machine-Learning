@@ -212,7 +212,7 @@ make help
 >   apply          Provisiona storage + bootstrap de treino, portão, e então 3 endpoints + autoscaling
 >   status         Descreve endpoints, configs e scalable targets em JSON
 >   dashboard      Imprime os links dos dois painéis do CloudWatch (o do lab e o de observação ao vivo)
->   resumo         Imprime os números já medidos, na ordem das linhas do DECISION.md
+>   resumo         Preenche a tabela de evidências do DECISION.md e imprime os números medidos
 >   compare        Smoke + latência, real-time vs serverless (DURACAO=180 mantém tráfego por 3 min)
 >   async          Sobe o payload para o S3, InvokeEndpointAsync, espera e valida a saída
 >   batch          CreateTransformJob para as 600 linhas de teste, espera e valida as 600 saídas
@@ -247,7 +247,7 @@ São 22 comandos, e é a lista inteira do laboratório.
 | `make apply` | stage 1 (S3 + training bootstrap) → portão (`DescribeTrainingJob` + `HeadObject`) → stage 2 (model + 3 endpoint configs/endpoints + autoscaling) | **sim** | o comando que sobe tudo, em um passo só |
 | `make status` | `DescribeEndpoint`/`DescribeEndpointConfig`/`DescribeScalableTargets` dos três modos | não, só leitura | inventário rápido do que está no ar |
 | `make dashboard` | `GetDashboard` nos dois painéis criados pelo estágio 2 e imprime os dois links | não, só leitura | os painéis são a superfície visual do lab; você não precisa achar o nome deles no console |
-| `make resumo` | lê os JSON de `artifacts/evidence/` que já existem e imprime os números agrupados pelas linhas do `DECISION.md` | não, nem toca a AWS | você preenche a decisão lendo o terminal, sem caçar arquivo no explorador |
+| `make resumo` | lê os JSON de `artifacts/evidence/` que já existem, imprime os números e regrava a tabela de evidências dentro do `DECISION.md` | não, nem toca a AWS | o documento fica sendo só a sua decisão; os dados entram sozinhos |
 | `make compare` | 1 chamada + 20 chamadas warm, real-time e serverless, com o mesmo payload fixo. Com `DURACAO=180`, alterna chamadas nos dois endpoints por 3 minutos em vez da rajada curta | invocações pequenas | mede latência e prova que as predictions batem; a duração existe para o painel ter linha em vez de ponto |
 | `make async` | sobe payload no S3, `InvokeEndpointAsync`, espera o output aparecer no S3 | sim, pequeno | prova o desacoplamento request/resposta |
 | `make batch` | `CreateTransformJob` via Boto3 nos 600 registros de teste | sim, efêmero | prova computação sem endpoint persistente |
@@ -932,7 +932,9 @@ make resumo
 code DECISION.md
 ```
 
-O `make resumo` imprime no terminal os números já medidos, agrupados pelas mesmas linhas da tabela do `DECISION.md` — você não precisa procurar arquivo nenhum. Ele lê os JSON de `artifacts/evidence/`, que ficam fora do controle de versão e por isso aparecem esmaecidos no explorador.
+O `make resumo` faz duas coisas: imprime os números medidos no terminal e **escreve a tabela de evidências direto no `DECISION.md`**. Você abre o documento já com os dados no lugar, e o que resta a fazer nele é só a decisão.
+
+Ele lê os JSON de `artifacts/evidence/` (que ficam fora do controle de versão, por isso aparecem esmaecidos no explorador) e regrava apenas o bloco entre os marcadores `inicio-evidencias` e `fim-evidencias`. O que você escreveu nas seções de recomendação nunca é tocado, e rodar de novo depois de cada medição só atualiza a tabela.
 
 > Saída esperada (a parte que interessa neste passo):
 > ```text
@@ -942,7 +944,7 @@ O `make resumo` imprime no terminal os números já medidos, agrupados pelas mes
 >   predições equivalentes     True
 > ```
 
-Com esses números à vista, responda nas linhas "Atendimento" e "App após fechamento da fatura" da tabela de evidências: qual comportamento você aceitaria para atendimento humano, e qual para o app com rajadas?
+Com a tabela já preenchida, escreva nas seções **Atendimento** e **App com rajadas** da Recomendação: o padrão serve, qual custo de ociosidade você aceita, e qual limitação assume.
 
 ### Checkpoint
 
@@ -1134,7 +1136,7 @@ make resumo
 code DECISION.md
 ```
 
-Use as seções "IMPORTAÇÃO DE ARQUIVO PESADO" e "CAMPANHA NOTURNA" da saída do `make resumo` para preencher as linhas correspondentes na tabela de evidências. A pergunta que importa: por que o batch não precisa de endpoint e o async precisa?
+O `make resumo` já atualizou as linhas do assíncrono e do batch na tabela. Escreva as seções **Arquivo assíncrono** e **Campanha noturna** da Recomendação. A pergunta que importa: por que o batch não precisa de endpoint e o async precisa?
 
 ### Checkpoint
 
@@ -1218,7 +1220,7 @@ make resumo
 code DECISION.md
 ```
 
-A seção "CONCORRÊNCIA E THROUGHPUT" do `make resumo` traz os três níveis lado a lado. Registre o que mudou entre concorrência 1 e concorrência 8: o p50 subiu? O p95 subiu mais que o p50? O RPS acompanhou a concorrência ou saturou? Não declare "melhor" por um único número: throughput e latência respondem perguntas diferentes.
+A linha "Concorrência no atendimento" da tabela já traz os três níveis lado a lado. Volte à seção **Atendimento** e registre o que mudou entre concorrência 1 e concorrência 8: o p50 subiu? O p95 subiu mais que o p50? O RPS acompanhou a concorrência ou saturou? Não declare "melhor" por um único número: throughput e latência respondem perguntas diferentes.
 
 ---
 
@@ -1387,7 +1389,9 @@ cd /workspaces/FIAP-Cloud-Based-Machine-Learning/03-serving-and-scaling
 code DECISION.md
 ```
 
-Termine as quatro seções de recomendação (uma por workload), a seção "Custo do erro" e "Condições que fariam a decisão mudar", usando os números reais de `artifacts/evidence/summary.md`.
+Rode `make resumo` uma última vez para a tabela de evidências ficar com todas as seis linhas medidas, e então termine as quatro seções de recomendação (uma por workload), a seção "Custo do erro" e "Condições que fariam a decisão mudar".
+
+A essa altura o documento não tem mais nenhum dado para você transcrever: a tabela veio preenchida, e o que falta é exclusivamente o seu julgamento.
 
 O painel continua aberto, e ele é a outra metade da evidência: o `summary.md` tem o número, o painel tem a forma. Use os dois — para cada linha da tabela de evidências do `DECISION.md`, o widget correspondente é:
 

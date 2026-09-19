@@ -71,7 +71,7 @@ status: ## Descreve endpoints, configs e scalable targets em JSON
 dashboard: ## Imprime os links dos dois painéis do CloudWatch (o do lab e o de observação ao vivo)
 	@$(PYTHON) $(SCRIPTS)/lab.py dashboard
 
-resumo: ## Imprime os números já medidos, na ordem das linhas do DECISION.md
+resumo: ## Preenche a tabela de evidências do DECISION.md e imprime os números medidos
 	@$(PYTHON) $(SCRIPTS)/lab.py resumo >/dev/null
 
 compare: ## Smoke + latência, real-time vs serverless (DURACAO=180 mantém tráfego por 3 min)
