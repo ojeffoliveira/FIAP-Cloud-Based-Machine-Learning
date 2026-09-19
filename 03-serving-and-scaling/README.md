@@ -936,13 +936,17 @@ O `make resumo` faz duas coisas: imprime os números medidos no terminal e **esc
 
 Ele lê os JSON de `artifacts/evidence/` (que ficam fora do controle de versão, por isso aparecem esmaecidos no explorador) e regrava apenas o bloco entre os marcadores `inicio-evidencias` e `fim-evidencias`. O que você escreveu nas seções de recomendação nunca é tocado, e rodar de novo depois de cada medição só atualiza a tabela.
 
-> Saída esperada (a parte que interessa neste passo):
+> Saída esperada (a parte que interessa neste passo; os números são da sua execução):
 > ```text
-> ATENDIMENTO HUMANO e APP COM RAJADAS  (Passo 14)
->   Atendimento (real-time)    primeira=613.27ms  p50=449.194ms  p95=476.596ms
->   App (serverless)           primeira=6848.669ms  p50=471.603ms  p95=513.715ms
->   predições equivalentes     True
+> ATENDIMENTO HUMANO — Real-Time
+>   Metade das chamadas respondeu em até 449 ms, e 95% em até 477 ms. A primeira chamada levou 613 ms.
+>
+> APP COM RAJADAS — Serverless
+>   Depois de aquecido, metade em até 472 ms e 95% em até 514 ms — praticamente igual ao real-time.
+>   Mas a primeira chamada depois de um tempo parado levou 6,8 segundos, cerca de 11 vezes o do real-time.
 > ```
+
+As mesmas frases vão para a tabela do `DECISION.md`, e o documento traz um bloco explicando o que são p50, p95 e milissegundo — você não precisa decorar nada para ler os números.
 
 Com a tabela já preenchida, escreva nas seções **Atendimento** e **App com rajadas** da Recomendação: o padrão serve, qual custo de ociosidade você aceita, e qual limitação assume.
 
@@ -1203,8 +1207,8 @@ Duas consequências práticas dessa reação:
 
 Se o widget estiver vazio logo depois do comando, recarregue depois de um ou dois minutos: a métrica é publicada com atraso próprio.
 
-> 📸 **Nota do autor (não é tarefa sua)** — capturar o widget logo após o `make load`, com o pico de tráfego passando acima da linha laranja do alvo e as duas séries ainda sobrepostas. É a imagem que explica por que o Passo 21 precisa forçar o scale-out.
-<!-- ![](img/painel-distribuicao.png) -->
+
+![](img/painel-distribuicao.png)
 
 ---
 

@@ -261,6 +261,93 @@ INICIO_EVIDENCIAS = "<!-- inicio-evidencias -->"
 FIM_EVIDENCIAS = "<!-- fim-evidencias -->"
 
 
+def _tempo(ms: float | None) -> str:
+    """Tempo em linguagem de gente, não em campo de JSON.
+
+    Duas decisões deliberadas. Primeira: arredonda. A medição vem com três casas
+    decimais (449.194 ms), e isso é precisão falsa — o ruído de rede numa chamada
+    HTTP é de dezenas de milissegundos, então a terceira decimal não significa nada
+    e só atrapalha a leitura. Segunda: acima de mil milissegundos, troca para
+    segundos, porque ninguém lê "6849 ms" como "quase sete segundos" — e é
+    exatamente essa percepção que decide se o padrão serve para atendimento.
+    """
+    if ms is None:
+        return "não medido"
+    if ms >= 1000:
+        return f"{ms / 1000:.1f}".replace(".", ",") + " segundos"
+    return f"{round(ms)} ms"
+
+
+def _milhar(n: int | None) -> str:
+    if n is None:
+        return "não medido"
+    return f"{n:,}".replace(",", ".")
+
+
+def _frases_evidencia(compare, async_r, batch, load, scale) -> dict[str, str]:
+    """Uma frase por linha da tabela, escrita para quem não abre JSON."""
+    frases: dict[str, str] = {}
+
+    if compare:
+        rt = compare.get("realtime", {})
+        sl = compare.get("serverless", {})
+        frases["atendimento"] = (
+            f"Metade das chamadas respondeu em até **{_tempo(rt.get('warm_p50_ms'))}**, "
+            f"e 95% em até **{_tempo(rt.get('warm_p95_ms'))}**. "
+            f"A primeira chamada levou {_tempo(rt.get('first_ms'))}."
+        )
+        frase_app = (
+            f"Depois de aquecido, metade em até **{_tempo(sl.get('warm_p50_ms'))}** "
+            f"e 95% em até **{_tempo(sl.get('warm_p95_ms'))}** — praticamente igual ao real-time. "
+            f"Mas a primeira chamada depois de um tempo parado levou **{_tempo(sl.get('first_ms'))}**"
+        )
+        primeira_sl, primeira_rt = sl.get("first_ms"), rt.get("first_ms")
+        if primeira_sl and primeira_rt:
+            frase_app += f", cerca de {round(primeira_sl / primeira_rt)} vezes o do real-time"
+        frases["app"] = frase_app + "."
+
+    if async_r:
+        entrada, saida = async_r.get("input_count"), async_r.get("output_count")
+        frases["async"] = (
+            f"Enviamos **{_milhar(entrada)} linhas** e recebemos **{_milhar(saida)} predições** de volta"
+            + (", sem perder nenhuma" if entrada == saida else " (contagens diferentes: investigue)")
+            + ". A resposta não veio na mesma chamada: chegou como arquivo no S3, minutos depois."
+        )
+
+    if batch:
+        frases["batch"] = (
+            f"**{_milhar(batch.get('output_count'))} predições** geradas por um job que subiu, "
+            f"processou e se desligou ({batch.get('status')}). Nenhum endpoint ficou no ar depois."
+        )
+
+    niveis = (load or {}).get("levels") or []
+    if niveis:
+        primeiro, ultimo = niveis[0], niveis[-1]
+        frase = (
+            f"Com {primeiro['concurrency']} chamada por vez, o endpoint atendeu "
+            f"**{primeiro['requests_per_second']:.0f} por segundo**. "
+            f"Com {ultimo['concurrency']} ao mesmo tempo, **{ultimo['requests_per_second']:.0f} por segundo**"
+        )
+        if primeiro["requests_per_second"]:
+            frase += f" — cerca de {ultimo['requests_per_second'] / primeiro['requests_per_second']:.0f} vezes mais vazão"
+        frase += (
+            f", e o tempo de cada resposta quase não mudou "
+            f"({_tempo(primeiro['p50_ms'])} contra {_tempo(ultimo['p50_ms'])})."
+        )
+        frases["carga"] = frase
+
+    if scale:
+        frase = (
+            f"O endpoint foi de **{scale.get('before')} para {scale.get('scaled')} instâncias** "
+            f"e voltou para {scale.get('restored')}, sem ficar nada fora do lugar."
+        )
+        if scale.get("observed_before") not in (None, scale.get("before")):
+            frase += f" (Havia {scale.get('observed_before')} instâncias antes, do tráfego anterior; o comando normalizou.)"
+        frases["elasticidade"] = frase
+
+    return frases
+
+
 def _grava_evidencias_no_decision(compare, async_r, batch, load, scale) -> int:
     """Reescreve a tabela de evidências do DECISION.md com os números medidos.
 
@@ -279,71 +366,46 @@ def _grava_evidencias_no_decision(compare, async_r, batch, load, scale) -> int:
         log("aviso: os marcadores de evidência não estão no DECISION.md; a tabela não foi atualizada")
         return 0
 
-    def rt(chave: str) -> str:
-        if not compare:
-            return "_rode `make compare`_"
-        x = compare.get(chave, {})
-        return (
-            f"p50 {x.get('warm_p50_ms')} ms · p95 {x.get('warm_p95_ms')} ms · "
-            f"primeira chamada {x.get('first_ms')} ms"
-        )
-
-    if async_r:
-        ev_async = (
-            f"{async_r.get('input_count')} linhas entraram e {async_r.get('output_count')} predições voltaram · "
-            f"capacidade {async_r.get('capacity_before')} → {async_r.get('capacity_after_observation')}"
-        )
-    else:
-        ev_async = "_rode `make async`_"
-
-    if batch:
-        ev_batch = f"{batch.get('output_count')} predições · job {batch.get('status')} e encerrado, sem endpoint"
-    else:
-        ev_batch = "_rode `make batch`_"
-
-    if load and load.get("levels"):
-        ev_load = " · ".join(
-            f"conc. {n['concurrency']}: p50 {n['p50_ms']} ms, {n['requests_per_second']} req/s"
-            for n in load["levels"]
-        )
-    else:
-        ev_load = "_rode `make load`_"
-
-    if scale:
-        ev_scale = f"{scale.get('before')} → {scale.get('scaled')} → {scale.get('restored')} instâncias"
-    else:
-        ev_scale = "_rode `make scale-demo`_"
-
-    linhas_tabela = [
-        ("Atendimento humano", "Real-Time", rt("realtime")),
-        ("App após fechamento da fatura", "Serverless", rt("serverless")),
-        ("Importação de arquivo pesado", "Asynchronous", ev_async),
-        ("Campanha noturna", "Batch Transform", ev_batch),
-        ("Concorrência no atendimento", "Real-Time sob carga", ev_load),
-        ("Elasticidade do atendimento", "Application Auto Scaling", ev_scale),
+    frases = _frases_evidencia(compare, async_r, batch, load, scale)
+    pendente = {
+        "atendimento": "_rode `make compare`_",
+        "app": "_rode `make compare`_",
+        "async": "_rode `make async`_",
+        "batch": "_rode `make batch`_",
+        "carga": "_rode `make load`_",
+        "elasticidade": "_rode `make scale-demo`_",
+    }
+    rotulos = [
+        ("atendimento", "Atendimento humano", "Real-Time"),
+        ("app", "App após fechamento da fatura", "Serverless"),
+        ("async", "Importação de arquivo pesado", "Asynchronous"),
+        ("batch", "Campanha noturna", "Batch Transform"),
+        ("carga", "Concorrência no atendimento", "Real-Time sob carga"),
+        ("elasticidade", "Elasticidade do atendimento", "Auto Scaling"),
     ]
 
     bloco = [
         INICIO_EVIDENCIAS,
-        "| Workload | Padrão | Evidência medida na sua execução |",
+        "| Workload | Padrão | O que medimos na sua execução |",
         "|---|---|---|",
-        *[f"| {w} | {pad} | {ev} |" for w, pad, ev in linhas_tabela],
+        *[f"| {nome} | {pad} | {frases.get(chave, pendente[chave])} |" for chave, nome, pad in rotulos],
         FIM_EVIDENCIAS,
     ]
 
-    inicio = texto.index(INICIO_EVIDENCIAS)
-    fim = texto.index(FIM_EVIDENCIAS) + len(FIM_EVIDENCIAS)
-    caminho.write_text(texto[:inicio] + "\n".join(bloco) + texto[fim:], encoding="utf-8")
-
-    return sum(1 for _, _, ev in linhas_tabela if not ev.startswith("_rode"))
+    caminho.write_text(
+        texto[: texto.index(INICIO_EVIDENCIAS)]
+        + "\n".join(bloco)
+        + texto[texto.index(FIM_EVIDENCIAS) + len(FIM_EVIDENCIAS) :],
+        encoding="utf-8",
+    )
+    return sum(1 for chave, _, _ in rotulos if chave in frases)
 
 
 def cmd_resumo(_args: argparse.Namespace) -> int:
-    """Imprime os números medidos até agora, na ordem das linhas do DECISION.md.
+    """Escreve a tabela de evidências no DECISION.md e repete no terminal.
 
-    Existe para o aluno não precisar caçar `artifacts/evidence/*.json` no explorador
-    de arquivos: a pasta está no .gitignore, aparece esmaecida e fica três níveis
-    abaixo. O passo pede um julgamento, não uma busca por arquivo.
+    As mesmas frases vão para os dois lugares, de propósito: se o terminal dissesse
+    uma coisa e o documento outra, o aluno não saberia em qual confiar.
     """
     compare = _le_evidencia("compare.json")
     async_r = _le_evidencia("async.json")
@@ -351,71 +413,33 @@ def cmd_resumo(_args: argparse.Namespace) -> int:
     load = _le_evidencia("load.json")
     scale = _le_evidencia("scale.json")
 
-    linhas: list[str] = []
+    frases = _frases_evidencia(compare, async_r, batch, load, scale)
+    secoes = [
+        ("atendimento", "ATENDIMENTO HUMANO — Real-Time", "make compare"),
+        ("app", "APP COM RAJADAS — Serverless", "make compare"),
+        ("async", "IMPORTAÇÃO DE ARQUIVO PESADO — Asynchronous", "make async"),
+        ("batch", "CAMPANHA NOTURNA — Batch Transform", "make batch"),
+        ("carga", "CONCORRÊNCIA NO ATENDIMENTO — Real-Time sob carga", "make load"),
+        ("elasticidade", "ELASTICIDADE DO ATENDIMENTO — Auto Scaling", "make scale-demo"),
+    ]
+
     falta: list[str] = []
-
-    linhas.append("ATENDIMENTO HUMANO e APP COM RAJADAS  (Passo 14)")
-    if compare:
-        for modo, rotulo in (("realtime", "Atendimento (real-time)"), ("serverless", "App (serverless)")):
-            x = compare.get(modo, {})
-            linhas.append(
-                f"  {rotulo:<26} primeira={x.get('first_ms')}ms  p50={x.get('warm_p50_ms')}ms  p95={x.get('warm_p95_ms')}ms"
-            )
-        linhas.append(f"  {'predições equivalentes':<26} {compare.get('predictions_match')}")
-    else:
-        falta.append("make compare")
-
-    linhas.append("")
-    linhas.append("IMPORTAÇÃO DE ARQUIVO PESADO  (Passo 18)")
-    if async_r:
-        linhas.append(
-            f"  entrada={async_r.get('input_count')} linhas  saída={async_r.get('output_count')} predições"
-        )
-        linhas.append(f"  capacidade antes={async_r.get('capacity_before')} depois={async_r.get('capacity_after_observation')}")
-        linhas.append(f"  saída em {async_r.get('output_uri')}")
-    else:
-        falta.append("make async")
-
-    linhas.append("")
-    linhas.append("CAMPANHA NOTURNA  (Passo 18)")
-    if batch:
-        linhas.append(f"  status={batch.get('status')}  saída={batch.get('output_count')} predições")
-        linhas.append(f"  sem endpoint persistente: o job existiu e terminou")
-    else:
-        falta.append("make batch")
-
-    linhas.append("")
-    linhas.append("CONCORRÊNCIA E THROUGHPUT  (Passo 20)")
-    if load:
-        for nivel in load.get("levels", []):
-            linhas.append(
-                f"  concorrência {nivel['concurrency']:<2} chamadas={nivel['requests']:<5} "
-                f"p50={nivel['p50_ms']}ms p95={nivel['p95_ms']}ms p99={nivel['p99_ms']}ms rps={nivel['requests_per_second']}"
-            )
-    else:
-        falta.append("make load")
-
-    if scale:
-        linhas.append("")
-        linhas.append("ELASTICIDADE  (Passo 21)")
-        linhas.append(f"  antes={scale.get('before')} escalado={scale.get('scaled')} restaurado={scale.get('restored')}")
-        if scale.get("observed_before") not in (None, scale.get("before")):
-            linhas.append(f"  (havia {scale.get('observed_before')} instâncias antes da normalização)")
-
-    for linha in linhas:
-        log(linha)
-
-    if falta:
+    for chave, titulo, comando in secoes:
+        log(titulo)
+        if chave in frases:
+            # O negrito do markdown não ajuda no terminal; sai só no documento.
+            log("  " + frases[chave].replace("**", ""))
+        else:
+            log(f"  ainda não medido — rode `{comando}`")
+            falta.append(comando)
         log("")
-        log("Ainda não medido: " + ", ".join(sorted(set(falta))))
 
     escritas = _grava_evidencias_no_decision(compare, async_r, batch, load, scale)
-    log("")
     log(f"DECISION.md: tabela de evidências atualizada ({escritas} de 6 linhas com dado medido).")
+    if falta:
+        log("Ainda não medido: " + ", ".join(sorted(set(falta))))
     log("O que resta no arquivo é só a sua decisão — a tabela é regravada a cada `make resumo`.")
 
-    # stdout carrega o dado bruto, para quem quiser pipar; a leitura humana vai
-    # toda para stderr acima.
     emit({"compare": compare, "async": async_r, "batch": batch, "load": load, "scale": scale})
     return 0
 
@@ -762,6 +786,15 @@ def cmd_scale_demo(args: argparse.Namespace) -> int:
     timeout = cfg.scale_demo_wait_timeout_s
     target = cfg.scale_demo_target_min_capacity
 
+    # O endpoint pode estar `Updating` quando este comando começa, e aí
+    # RegisterScalableTarget falha com ValidationException ("The status should be in
+    # 'InService'"). Acontece de verdade depois de `make load DURACAO=...`: o
+    # tráfego sustentado dispara o scale-out da política, e o endpoint fica alguns
+    # minutos atualizando. Pior: durante esse tempo o CurrentInstanceCount ainda lê
+    # 1, então checar só a contagem não detecta nada. Esperar InService é parte do
+    # comando, não cortesia.
+    aws.wait_endpoint_in_service(session, endpoint_name, timeout_seconds=timeout)
+
     observado = aws.describe_endpoint(session, endpoint_name)["ProductionVariants"][0]["CurrentInstanceCount"]
     log(f"[scale] antes: {observado}")
 
@@ -772,6 +805,7 @@ def cmd_scale_demo(args: argparse.Namespace) -> int:
     # natural levaria mais de dez minutos, o que não cabe numa aula.
     if observado != 1:
         log(f"[scale] encontrei {observado} instâncias (provável scale-out do tráfego anterior); normalizando para 1 antes de demonstrar")
+        aws.wait_endpoint_in_service(session, endpoint_name, timeout_seconds=timeout)
         aws.register_scalable_target_min_capacity(session, resource_id, min_capacity=1, max_capacity=2)
         aws.set_endpoint_desired_capacity(session, endpoint_name, desired_instance_count=1)
         aws.wait_instance_count(session, endpoint_name, target_count=1, timeout_seconds=timeout)
@@ -803,6 +837,9 @@ def cmd_scale_demo(args: argparse.Namespace) -> int:
             log(f"[scale] mantendo {target} instâncias por {duracao}s para o painel registrar o degrau")
             time.sleep(duracao)
 
+        # Mesma guarda da entrada: a política pode ter mexido no endpoint durante a
+        # pausa, e o registro exige InService.
+        aws.wait_endpoint_in_service(session, endpoint_name, timeout_seconds=timeout)
         log("[scale] restaurando MinCapacity=1, MaxCapacity=2 (valores gerenciados pelo Terraform, sem deixar drift)")
         aws.register_scalable_target_min_capacity(session, resource_id, min_capacity=1, max_capacity=2)
         log("[scale] forçando DesiredInstanceCount de volta para 1: baixar só o MaxCapacity não faz o "
